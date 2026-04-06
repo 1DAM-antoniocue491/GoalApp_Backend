@@ -26,7 +26,7 @@ class FormacionPartido(Base):
     __tablename__ = "formacion_partido"
 
     # Clave primaria
-    id_formacion_partido = Column(Integer, primary_key=True, index=True)
+    id_formacion_partido = Column(Integer, primary_key=True)
 
     # Relaciones: partido, equipo y formación utilizada
     id_partido = Column(Integer, ForeignKey("partidos.id_partido"), nullable=False)

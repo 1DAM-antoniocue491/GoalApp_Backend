@@ -24,7 +24,7 @@ class Formacion(Base):
     __tablename__ = "formaciones"
 
     # Clave primaria
-    id_formacion = Column(Integer, primary_key=True, index=True)
+    id_formacion = Column(Integer, primary_key=True)
     
     # Información de la formación
     nombre = Column(String(20), nullable=False, unique=True)  # Ejemplo: "4-4-2", "4-3-3"

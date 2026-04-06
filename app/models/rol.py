@@ -31,7 +31,7 @@ class Rol(Base):
     __tablename__ = "roles"
 
     # Clave primaria
-    id_rol = Column(Integer, primary_key=True, index=True)
+    id_rol = Column(Integer, primary_key=True)
 
     # Información del rol
     nombre = Column(String(50), nullable=False, unique=True)  # Ejemplo: "Admin", "Coach"

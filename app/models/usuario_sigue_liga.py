@@ -30,7 +30,7 @@ class UsuarioSigueLiga(Base):
     )
 
     # Clave primaria
-    id_seguimiento = Column(Integer, primary_key=True, index=True)
+    id_seguimiento = Column(Integer, primary_key=True)
 
     # Relaciones
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)

@@ -25,7 +25,7 @@ class UsuarioRol(Base):
     __tablename__ = "usuario_rol"
 
     # Clave primaria
-    id_usuario_rol = Column(Integer, primary_key=True, index=True)
+    id_usuario_rol = Column(Integer, primary_key=True)
 
     # Claves foráneas: relación entre usuario y rol
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)

@@ -31,7 +31,7 @@ class Notificacion(Base):
     __tablename__ = "notificaciones"
 
     # Clave primaria
-    id_notificacion = Column(Integer, primary_key=True, index=True)
+    id_notificacion = Column(Integer, primary_key=True)
 
     # Relación: usuario destinatario
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)

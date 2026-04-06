@@ -33,7 +33,7 @@ class Equipo(Base):
     __tablename__ = "equipos"
 
     # Clave primaria
-    id_equipo = Column(Integer, primary_key=True, index=True)
+    id_equipo = Column(Integer, primary_key=True)
 
     # Información básica del equipo
     nombre = Column(String(100), nullable=False, unique=True)  # Nombre único del equipo

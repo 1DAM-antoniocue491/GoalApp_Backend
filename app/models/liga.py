@@ -29,7 +29,7 @@ class Liga(Base):
     __tablename__ = "ligas"
 
     # Clave primaria
-    id_liga = Column(Integer, primary_key=True, index=True)
+    id_liga = Column(Integer, primary_key=True)
 
     # Información de la liga
     nombre = Column(String(100), nullable=False, unique=True)  # Nombre único de la liga

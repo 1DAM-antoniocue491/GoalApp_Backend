@@ -25,7 +25,7 @@ class PosicionFormacion(Base):
     __tablename__ = "posiciones_formacion"
 
     # Clave primaria
-    id_posicion = Column(Integer, primary_key=True, index=True)
+    id_posicion = Column(Integer, primary_key=True)
     
     # Relación: formación a la que pertenece
     id_formacion = Column(Integer, ForeignKey("formaciones.id_formacion"), nullable=False)

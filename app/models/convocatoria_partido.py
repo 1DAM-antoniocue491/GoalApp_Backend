@@ -29,7 +29,7 @@ class ConvocatoriaPartido(Base):
     __tablename__ = "convocatoria_partido"
 
     # Clave primaria
-    id_convocatoria = Column(Integer, primary_key=True, index=True)
+    id_convocatoria = Column(Integer, primary_key=True)
 
     # Relaciones
     id_partido = Column(Integer, ForeignKey("partidos.id_partido", ondelete="CASCADE"), nullable=False)

@@ -33,7 +33,7 @@ class LigaConfiguracion(Base):
     __tablename__ = "liga_configuracion"
 
     # Clave primaria
-    id_configuracion = Column(Integer, primary_key=True, index=True)
+    id_configuracion = Column(Integer, primary_key=True)
 
     # Relación con liga (única configuración por liga)
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False, unique=True)

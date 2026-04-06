@@ -28,7 +28,7 @@ class TokenRecuperacion(Base):
     __tablename__ = "tokens_recuperacion"
 
     # Clave primaria
-    id_token = Column(Integer, primary_key=True, index=True)
+    id_token = Column(Integer, primary_key=True)
 
     # Relación: usuario solicitante
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)

@@ -33,7 +33,7 @@ class EventoPartido(Base):
     __tablename__ = "eventos_partido"
 
     # Clave primaria
-    id_evento = Column(Integer, primary_key=True, index=True)
+    id_evento = Column(Integer, primary_key=True)
 
     # Relaciones: partido y jugador involucrado
     id_partido = Column(Integer, ForeignKey("partidos.id_partido"), nullable=False)

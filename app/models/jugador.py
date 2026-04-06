@@ -31,7 +31,7 @@ class Jugador(Base):
     __tablename__ = "jugadores"
 
     # Clave primaria
-    id_jugador = Column(Integer, primary_key=True, index=True)
+    id_jugador = Column(Integer, primary_key=True)
 
     # Relaciones: usuario y equipo
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False, unique=True)  # Un usuario = un jugador

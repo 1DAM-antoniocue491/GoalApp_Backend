@@ -39,7 +39,7 @@ class Usuario(Base):
     __tablename__ = "usuarios"
 
     # Clave primaria
-    id_usuario = Column(Integer, primary_key=True, index=True)
+    id_usuario = Column(Integer, primary_key=True)
 
     # Información básica
     nombre = Column(String(100), nullable=False)

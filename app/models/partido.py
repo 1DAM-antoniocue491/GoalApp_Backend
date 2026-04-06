@@ -34,7 +34,7 @@ class Partido(Base):
     __tablename__ = "partidos"
 
     # Clave primaria
-    id_partido = Column(Integer, primary_key=True, index=True)
+    id_partido = Column(Integer, primary_key=True)
 
     # Relaciones: liga y equipos participantes
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)

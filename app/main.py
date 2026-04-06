@@ -52,8 +52,14 @@ async def lifespan(app: FastAPI):
 
     # Crear todas las tablas definidas en los modelos
     # NOTA: En producción, usar Alembic en lugar de esto
-    Base.metadata.create_all(bind=engine)
-    print("[OK] Tablas de base de datos verificadas")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[OK] Tablas de base de datos verificadas")
+    except Exception as e:
+        # Si las tablas ya existen o hay error de índices, continuar
+        # Esto es común en hosts con límites de almacenamiento
+        print(f"[WARN] No se pudieron verificar todas las tablas/índices: {e}")
+        print("[INFO] Continuando con las tablas existentes...")
 
     yield
 
