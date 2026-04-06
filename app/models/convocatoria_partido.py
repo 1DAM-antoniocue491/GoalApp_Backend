@@ -3,7 +3,7 @@
 Modelo de ConvocatoriaPartido para gestionar las convocatorias de jugadores.
 Registra qué jugadores están convocados y cuáles son titulares en cada partido.
 """
-from sqlalchemy import Column, Integer, Boolean, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, Boolean, ForeignKey, DateTime, text
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -38,7 +38,7 @@ class ConvocatoriaPartido(Base):
     es_titular = Column(Boolean, nullable=False, default=False)  # False = suplente
 
     # Auditoría
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
 
     # Relaciones ORM
     partido = relationship("Partido", lazy="selectin")

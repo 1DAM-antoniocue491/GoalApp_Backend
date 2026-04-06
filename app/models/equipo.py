@@ -3,7 +3,7 @@
 Modelo de Equipo para gestionar los equipos de la liga.
 Incluye información del equipo, entrenador y delegado.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, text
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -45,8 +45,8 @@ class Equipo(Base):
     id_delegado = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
 
     # Relaciones ORM
     liga = relationship("Liga", back_populates="equipos", lazy="selectin")

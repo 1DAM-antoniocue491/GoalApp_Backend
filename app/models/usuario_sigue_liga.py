@@ -3,7 +3,7 @@
 Modelo de relación Usuario-Sigue-Liga.
 Permite a los usuarios seguir ligas para recibir notificaciones.
 """
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, func, UniqueConstraint
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -36,7 +36,7 @@ class UsuarioSigueLiga(Base):
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)
 
     # Auditoría
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
 
     # Relaciones ORM
     usuario = relationship("Usuario", lazy="selectin")

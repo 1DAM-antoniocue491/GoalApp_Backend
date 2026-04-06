@@ -3,7 +3,7 @@
 Modelo de Configuración de Liga para gestionar parámetros de cada liga.
 Define la configuración específica de cada competición (horarios, límites, etc.).
 """
-from sqlalchemy import Column, Integer, Time, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, Time, ForeignKey, DateTime, text
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -44,8 +44,8 @@ class LigaConfiguracion(Base):
     min_partidos_entre_equipos = Column(Integer, nullable=False, default=2)
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
 
     # Relaciones ORM
     liga = relationship("Liga", back_populates="configuracion", lazy="selectin")

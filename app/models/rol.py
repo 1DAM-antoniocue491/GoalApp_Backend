@@ -3,7 +3,7 @@
 Modelo de Rol para el sistema de autorización.
 Define los diferentes roles de usuario en la aplicación.
 """
-from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy import Column, Integer, String, DateTime, text
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -37,8 +37,8 @@ class Rol(Base):
     descripcion = Column(String(255), nullable=True)  # Descripción opcional del rol
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
 
     # Relaciones
     usuarios = relationship("Usuario", secondary="usuario_rol", back_populates="roles", lazy="selectin")

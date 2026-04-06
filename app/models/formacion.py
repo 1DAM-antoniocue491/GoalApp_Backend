@@ -3,7 +3,7 @@
 Modelo de Formación táctica para definir esquemas de juego.
 Define formaciones como 4-4-2, 4-3-3, etc.
 """
-from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy import Column, Integer, String, DateTime, text
 from ..database.connection import Base
 
 
@@ -29,5 +29,5 @@ class Formacion(Base):
     nombre = Column(String(20), nullable=False, unique=True)  # Ejemplo: "4-4-2", "4-3-3"
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)

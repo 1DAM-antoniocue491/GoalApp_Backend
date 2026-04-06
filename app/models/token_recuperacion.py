@@ -3,7 +3,7 @@
 Modelo de Token de Recuperación para gestión de contraseñas olvidadas.
 Almacena tokens temporales para el flujo de recuperación de contraseña.
 """
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, text
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -38,7 +38,7 @@ class TokenRecuperacion(Base):
     usado = Column(Boolean, nullable=False, default=False)
 
     # Auditoría: fecha de creación
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
 
     # Relaciones ORM
     usuario = relationship("Usuario", lazy="selectin")
