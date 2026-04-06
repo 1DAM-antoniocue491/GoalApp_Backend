@@ -3,7 +3,8 @@
 Modelo de Jugador para vincular usuarios con equipos.
 Almacena información deportiva del jugador (posición, dorsal, estado).
 """
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -42,8 +43,10 @@ class Jugador(Base):
     activo = Column(Boolean, nullable=False, default=True)  # Si está activo en el equipo
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
+    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
+    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
     usuario = relationship("Usuario", lazy="selectin")

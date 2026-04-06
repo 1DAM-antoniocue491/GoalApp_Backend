@@ -3,7 +3,8 @@
 Modelo de Notificación para enviar mensajes a usuarios.
 Gestiona notificaciones push y mensajes del sistema.
 """
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, text, Text
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -40,8 +41,10 @@ class Notificacion(Base):
     leida = Column(Boolean, nullable=False, default=False)  # Estado de lectura
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
+    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
+    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
     usuario = relationship("Usuario", lazy="selectin")

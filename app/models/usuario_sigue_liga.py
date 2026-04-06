@@ -3,7 +3,8 @@
 Modelo de relación Usuario-Sigue-Liga.
 Permite a los usuarios seguir ligas para recibir notificaciones.
 """
-from sqlalchemy import Column, Integer, ForeignKey, DateTime, text, UniqueConstraint
+from sqlalchemy import Column, Integer, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -35,8 +36,10 @@ class UsuarioSigueLiga(Base):
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)
 
-    # Auditoría
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
+    # Auditoría: fecha de creación
+    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
+    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relaciones ORM
     usuario = relationship("Usuario", lazy="selectin")

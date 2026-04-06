@@ -3,7 +3,8 @@
 Modelo de Liga para gestionar competiciones.
 Representa una liga o torneo con sus equipos y partidos.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -36,8 +37,10 @@ class Liga(Base):
     activa = Column(Boolean, nullable=False, default=True)  # Liga activa/inactiva
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
+    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
+    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones
     equipos = relationship("Equipo", back_populates="liga", lazy="selectin")

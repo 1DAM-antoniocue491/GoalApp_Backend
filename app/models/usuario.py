@@ -3,7 +3,8 @@
 Modelo de Usuario para la base de datos.
 Representa los usuarios registrados en el sistema con sus credenciales y datos básicos.
 """
-from sqlalchemy import Column, Integer, String, DateTime, Date, Enum, text
+from sqlalchemy import Column, Integer, String, DateTime, Date, Enum
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 from ..database.connection import Base
@@ -52,8 +53,10 @@ class Usuario(Base):
     imagen_url = Column(String(255), nullable=True)  # URL de la imagen de perfil
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
+    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
+    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones
     roles = relationship("Rol", secondary="usuario_rol", back_populates="usuarios", lazy="selectin")

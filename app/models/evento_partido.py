@@ -3,7 +3,8 @@
 Modelo de Evento de Partido para registrar incidencias del juego.
 Almacena goles, tarjetas, cambios y otros eventos del partido.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
@@ -43,8 +44,10 @@ class EventoPartido(Base):
     minuto = Column(Integer, nullable=False)  # Minuto en que ocurrió (0-90+)
 
     # Auditoría: fechas de creación y actualización
-    created_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=text('CURRENT_TIMESTAMP'), onupdate=text('CURRENT_TIMESTAMP'), nullable=False)
+    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
+    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
     partido = relationship("Partido", lazy="selectin")
