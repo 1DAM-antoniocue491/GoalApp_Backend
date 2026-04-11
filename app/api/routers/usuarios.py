@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role, get_current_user
-from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioResponse
+from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioResponse, LigaConRolResponse
 from app.schemas.seguimiento import SeguimientoResponse, LigaSeguidaResponse
 from app.api.services.usuario_service import (
     crear_usuario,
@@ -17,7 +17,8 @@ from app.api.services.usuario_service import (
     eliminar_usuario,
     seguir_liga,
     dejar_de_seguir_liga,
-    obtener_ligas_seguidas
+    obtener_ligas_seguidas,
+    obtener_ligas_con_rol
 )
 
 # Configuración del router
@@ -229,3 +230,27 @@ def obtener_ligas_seguidas_router(
     Roles permitidos: Todos los usuarios autenticados
     """
     return obtener_ligas_seguidas(db, current_user.id_usuario)
+
+
+@router.get("/me/ligas", response_model=list[LigaConRolResponse])
+def obtener_ligas_usuario_router(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Obtener las ligas donde el usuario tiene un rol asignado.
+
+    Devuelve la lista de ligas donde el usuario autenticado tiene algun rol
+    (admin, entrenador, jugador, delegado, observador).
+
+    Parámetros:
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        List[LigaConRolResponse]: Lista de ligas con el rol del usuario en cada una
+
+    Requiere autenticación: Sí
+    Roles permitidos: Todos los usuarios autenticados
+    """
+    return obtener_ligas_con_rol(db, current_user.id_usuario)

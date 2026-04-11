@@ -533,3 +533,50 @@ def obtener_ligas_seguidas(db: Session, usuario_id: int):
     ligas = db.query(Liga).filter(Liga.id_liga.in_(ids_ligas)).all()
 
     return ligas
+
+
+def obtener_ligas_con_rol(db: Session, usuario_id: int):
+    """
+    Obtiene las ligas donde el usuario tiene un rol asignado.
+
+    Realiza un join entre las tablas usuario_rol, ligas y roles para obtener
+    las ligas junto con el rol del usuario en cada una.
+
+    Args:
+        db (Session): Sesion de base de datos SQLAlchemy
+        usuario_id (int): ID del usuario
+
+    Returns:
+        List[dict]: Lista de diccionarios con datos de la liga y el rol del usuario.
+                     Cada diccionario contiene:
+                     - id_liga: ID de la liga
+                     - nombre: Nombre de la liga
+                     - temporada: Temporada de la liga
+                     - activa: Si la liga esta activa
+                     - rol: Nombre del rol del usuario en esta liga
+    """
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.liga import Liga
+    from app.models.rol import Rol
+
+    # Query con join para obtener liga + rol del usuario
+    resultados = (
+        db.query(Liga, Rol)
+        .join(UsuarioRol, UsuarioRol.id_liga == Liga.id_liga)
+        .join(Rol, Rol.id_rol == UsuarioRol.id_rol)
+        .filter(UsuarioRol.id_usuario == usuario_id)
+        .all()
+    )
+
+    # Construir lista de respuestas con datos de liga y rol
+    ligas_con_rol = []
+    for liga, rol in resultados:
+        ligas_con_rol.append({
+            "id_liga": liga.id_liga,
+            "nombre": liga.nombre,
+            "temporada": liga.temporada,
+            "activa": liga.activa,
+            "rol": rol.nombre
+        })
+
+    return ligas_con_rol

@@ -133,3 +133,26 @@ class UsuarioResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LigaConRolResponse(BaseModel):
+    """
+    Schema de respuesta para una liga donde el usuario tiene un rol asignado.
+
+    Incluye informacion basica de la liga y el rol del usuario en ella.
+
+    Attributes:
+        id_liga (int): ID de la liga
+        nombre (str): Nombre de la liga
+        temporada (str): Temporada de la liga
+        activa (bool): Si la liga esta activa
+        rol (str): Nombre del rol del usuario en esta liga
+    """
+    id_liga: int
+    nombre: str
+    temporada: str
+    activa: bool
+    rol: str
+
+    class Config:
+        from_attributes = True

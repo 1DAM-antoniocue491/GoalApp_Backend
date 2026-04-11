@@ -3,6 +3,7 @@
 Tests para el módulo de usuarios.
 """
 import pytest
+from app.models.usuario_rol import UsuarioRol
 
 
 # ============================================================
@@ -276,3 +277,74 @@ class TestSeguirLigas:
         data = response.json()
         assert len(data) == 1
         assert data[0]["id_liga"] == liga_ejemplo.id_liga
+
+
+# ============================================================
+# LIGAS CON ROL ASIGNADO
+# ============================================================
+
+class TestLigasConRol:
+    """Tests para obtener las ligas donde el usuario tiene un rol."""
+
+    def test_obtener_ligas_con_rol_sin_roles(self, client, token_usuario):
+        """Obtener ligas con rol cuando el usuario no tiene roles asignados."""
+        response = client.get(
+            "/api/v1/usuarios/me/ligas",
+            headers={"Authorization": f"Bearer {token_usuario}"}
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_obtener_ligas_con_rol_admin(self, client, usuario_admin, token_admin):
+        """Obtener ligas donde el usuario tiene rol admin."""
+        response = client.get(
+            "/api/v1/usuarios/me/ligas",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["rol"] == "admin"
+
+    def test_obtener_ligas_con_rol_multiples_ligas(
+        self, client, usuario_ejemplo, liga_ejemplo, liga2_ejemplo, rol_admin, rol_coach, db, token_usuario
+    ):
+        """Obtener ligas donde el usuario tiene diferentes roles."""
+        # Asignar rol admin en liga 1
+        usuario_rol1 = UsuarioRol(
+            id_usuario=usuario_ejemplo.id_usuario,
+            id_rol=rol_admin.id_rol,
+            id_liga=liga_ejemplo.id_liga
+        )
+        db.add(usuario_rol1)
+
+        # Asignar rol coach en liga 2
+        usuario_rol2 = UsuarioRol(
+            id_usuario=usuario_ejemplo.id_usuario,
+            id_rol=rol_coach.id_rol,
+            id_liga=liga2_ejemplo.id_liga
+        )
+        db.add(usuario_rol2)
+        db.commit()
+
+        response = client.get(
+            "/api/v1/usuarios/me/ligas",
+            headers={"Authorization": f"Bearer {token_usuario}"}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+
+        # Verificar que estan ambas ligas con sus roles correctos
+        ligas_dict = {item["id_liga"]: item["rol"] for item in data}
+        assert ligas_dict[liga_ejemplo.id_liga] == "admin"
+        assert ligas_dict[liga2_ejemplo.id_liga] == "coach"
+
+    def test_obtener_ligas_sin_autenticacion(self, client):
+        """Intentar obtener ligas sin autenticacion debe fallar."""
+        response = client.get("/api/v1/usuarios/me/ligas")
+
+        assert response.status_code == 401
