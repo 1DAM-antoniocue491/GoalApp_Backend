@@ -68,11 +68,12 @@ class TestPermisosCoach:
     """Tests para permisos de entrenador (coach)."""
 
     @pytest.fixture
-    def usuario_coach(self, db, usuario_ejemplo, rol_coach):
-        """Crea un usuario con rol coach."""
+    def usuario_coach(self, db, usuario_ejemplo, rol_coach, liga_ejemplo):
+        """Crea un usuario con rol coach en una liga."""
         usuario_rol = UsuarioRol(
             id_usuario=usuario_ejemplo.id_usuario,
-            id_rol=rol_coach.id_rol
+            id_rol=rol_coach.id_rol,
+            id_liga=liga_ejemplo.id_liga
         )
         db.add(usuario_rol)
         db.commit()
@@ -133,11 +134,12 @@ class TestPermisosPlayer:
     """Tests para permisos de jugador (player)."""
 
     @pytest.fixture
-    def usuario_player(self, db, usuario_ejemplo, rol_player):
-        """Crea un usuario con rol player."""
+    def usuario_player(self, db, usuario_ejemplo, rol_player, liga_ejemplo):
+        """Crea un usuario con rol player en una liga."""
         usuario_rol = UsuarioRol(
             id_usuario=usuario_ejemplo.id_usuario,
-            id_rol=rol_player.id_rol
+            id_rol=rol_player.id_rol,
+            id_liga=liga_ejemplo.id_liga
         )
         db.add(usuario_rol)
         db.commit()
@@ -207,8 +209,8 @@ class TestPermisosViewer:
     """Tests para permisos de visualizador (viewer)."""
 
     @pytest.fixture
-    def usuario_viewer(self, db, usuario_ejemplo):
-        """Crea un usuario con rol viewer."""
+    def usuario_viewer(self, db, usuario_ejemplo, liga_ejemplo):
+        """Crea un usuario con rol viewer en una liga."""
         from app.models.rol import Rol
 
         rol = db.query(Rol).filter(Rol.nombre == "viewer").first()
@@ -220,7 +222,8 @@ class TestPermisosViewer:
 
         usuario_rol = UsuarioRol(
             id_usuario=usuario_ejemplo.id_usuario,
-            id_rol=rol.id_rol
+            id_rol=rol.id_rol,
+            id_liga=liga_ejemplo.id_liga
         )
         db.add(usuario_rol)
         db.commit()

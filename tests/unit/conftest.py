@@ -161,11 +161,12 @@ def rol_player(db):
 
 
 @pytest.fixture
-def usuario_admin(db, usuario_ejemplo, rol_admin):
-    """Crea un usuario con rol admin."""
+def usuario_admin(db, usuario_ejemplo, rol_admin, liga_ejemplo):
+    """Crea un usuario con rol admin en una liga."""
     usuario_rol = UsuarioRol(
         id_usuario=usuario_ejemplo.id_usuario,
-        id_rol=rol_admin.id_rol
+        id_rol=rol_admin.id_rol,
+        id_liga=liga_ejemplo.id_liga
     )
     db.add(usuario_rol)
     db.commit()

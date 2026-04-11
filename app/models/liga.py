@@ -46,3 +46,4 @@ class Liga(Base):
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
     equipos = relationship("Equipo", back_populates="liga", lazy="raise")
     configuracion = relationship("LigaConfiguracion", back_populates="liga", uselist=False, lazy="raise")
+    usuario_roles = relationship("UsuarioRol", back_populates="liga", lazy="raise")

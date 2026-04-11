@@ -239,21 +239,24 @@ def eliminar_usuario(db: Session, usuario_id: int):
 # ============================================================
 
 
-def asignar_rol_a_usuario(db: Session, usuario_id: int, rol_id: int):
+def asignar_rol_a_usuario(db: Session, usuario_id: int, rol_id: int, id_liga: int = None):
     """
-    Asigna un rol a un usuario.
-    
+    Asigna un rol a un usuario en una liga específica.
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         usuario_id (int): ID del usuario
         rol_id (int): ID del rol a asignar
-    
+        id_liga (int): ID de la liga donde aplica el rol (requerido)
+
     Returns:
         bool: True si se asignó correctamente
-    
+
     Raises:
-        ValueError: Si el usuario o rol no existe, o si el usuario ya tiene ese rol
+        ValueError: Si el usuario, rol o liga no existe, o si el usuario ya tiene ese rol en esa liga
     """
+    from app.models.liga import Liga
+
     # Verificar que el usuario existe
     usuario = obtener_usuario_por_id(db, usuario_id)
     if not usuario:
@@ -264,17 +267,23 @@ def asignar_rol_a_usuario(db: Session, usuario_id: int, rol_id: int):
     if not rol:
         raise ValueError("Rol no encontrado")
 
-    # Evitar asignaciones duplicadas
+    # Verificar que la liga existe
+    liga = db.query(Liga).filter(Liga.id_liga == id_liga).first()
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    # Evitar asignaciones duplicadas para la misma liga
     existente = db.query(UsuarioRol).filter(
         UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_rol == rol_id
+        UsuarioRol.id_rol == rol_id,
+        UsuarioRol.id_liga == id_liga
     ).first()
 
     if existente:
-        raise ValueError("El usuario ya tiene este rol")
+        raise ValueError("El usuario ya tiene este rol en esta liga")
 
     # Crear la asignación
-    asignacion = UsuarioRol(id_usuario=usuario_id, id_rol=rol_id)
+    asignacion = UsuarioRol(id_usuario=usuario_id, id_rol=rol_id, id_liga=id_liga)
     db.add(asignacion)
     db.commit()
     return True

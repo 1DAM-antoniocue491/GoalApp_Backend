@@ -6,7 +6,7 @@ Endpoints para crear, listar, actualizar y eliminar ligas de fútbol.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_role
+from app.api.dependencies import get_db, require_role, get_current_user
 from app.schemas.liga import LigaCreate, LigaUpdate, LigaResponse
 from app.schemas.clasificacion import ClasificacionItem
 from app.api.services.liga_service import (
@@ -27,23 +27,25 @@ router = APIRouter(
 )
 
 @router.post("/", response_model=LigaResponse, dependencies=[Depends(require_role("admin"))])
-def crear_liga_router(liga: LigaCreate, db: Session = Depends(get_db)):
+def crear_liga_router(liga: LigaCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Crear una nueva liga.
-    
+
     Registra una nueva liga o competición en el sistema con su información básica.
-    
+    El usuario creador es automáticamente asignado como admin de la liga.
+
     Parámetros:
         - liga (LigaCreate): Datos de la liga (nombre, país, temporada, etc.)
         - db (Session): Sesión de base de datos
-    
+        - current_user: Usuario autenticado (se obtiene del token JWT)
+
     Returns:
         LigaResponse: Información de la liga creada con su ID asignado
-    
+
     Requiere autenticación: Sí
     Roles permitidos: Admin
     """
-    return crear_liga(db, liga)
+    return crear_liga(db, liga, id_usuario_creador=current_user.id_usuario)
 
 @router.get("/", response_model=list[LigaResponse])
 def listar_ligas(db: Session = Depends(get_db)):

@@ -1,7 +1,7 @@
 """
 Servicios de lógica de negocio para Liga.
 Maneja operaciones CRUD de ligas/competiciones, incluyendo gestión de
-nombres y temporadas.
+nombres y temporadas, y asignación automática del rol admin al creador.
 """
 from sqlalchemy.orm import Session
 from typing import List
@@ -11,17 +11,23 @@ from app.models.liga import Liga
 from app.models.liga_configuracion import LigaConfiguracion
 from app.models.equipo import Equipo
 from app.models.partido import Partido
+from app.models.rol import Rol
+from app.models.usuario_rol import UsuarioRol
 from app.schemas.liga import LigaCreate, LigaUpdate
 from app.schemas.clasificacion import ClasificacionItem
 
 
-def crear_liga(db: Session, datos: LigaCreate):
+def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
     """
     Crea una nueva liga en la base de datos y su configuración por defecto.
+
+    Si se proporciona id_usuario_creador, asigna automáticamente el rol admin
+    al usuario creador para esta liga.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         datos (LigaCreate): Datos de la liga (nombre y temporada)
+        id_usuario_creador (int, optional): ID del usuario que crea la liga
 
     Returns:
         Liga: Objeto Liga creado con su ID asignado
@@ -36,6 +42,27 @@ def crear_liga(db: Session, datos: LigaCreate):
     # Crear configuración por defecto
     configuracion = LigaConfiguracion(id_liga=liga.id_liga)
     db.add(configuracion)
+
+    # Si se proporcionó un usuario creador, asignar rol admin para esta liga
+    if id_usuario_creador:
+        # Buscar el rol admin (asumiendo que existe con nombre "admin")
+        rol_admin = db.query(Rol).filter(Rol.nombre == "admin").first()
+        if rol_admin:
+            # Verificar que no exista ya esta asignación
+            asignacion_existente = db.query(UsuarioRol).filter(
+                UsuarioRol.id_usuario == id_usuario_creador,
+                UsuarioRol.id_rol == rol_admin.id_rol,
+                UsuarioRol.id_liga == liga.id_liga
+            ).first()
+
+            if not asignacion_existente:
+                # Crear la asignación de rol admin para esta liga
+                usuario_rol = UsuarioRol(
+                    id_usuario=id_usuario_creador,
+                    id_rol=rol_admin.id_rol,
+                    id_liga=liga.id_liga
+                )
+                db.add(usuario_rol)
 
     db.commit()
     db.refresh(liga)
