@@ -44,4 +44,5 @@ class TokenRecuperacion(Base):
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relaciones ORM
-    usuario = relationship("Usuario", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    usuario = relationship("Usuario", lazy="raise")

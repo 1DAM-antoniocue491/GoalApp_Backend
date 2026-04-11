@@ -50,5 +50,6 @@ class EventoPartido(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
-    partido = relationship("Partido", lazy="selectin")
-    jugador = relationship("Jugador", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    partido = relationship("Partido", lazy="raise")
+    jugador = relationship("Jugador", lazy="raise")

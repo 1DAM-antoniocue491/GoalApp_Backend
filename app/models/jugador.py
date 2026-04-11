@@ -49,5 +49,6 @@ class Jugador(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
-    usuario = relationship("Usuario", lazy="selectin")
-    equipo = relationship("Equipo", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    usuario = relationship("Usuario", lazy="raise")
+    equipo = relationship("Equipo", lazy="raise")

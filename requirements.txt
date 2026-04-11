@@ -1,12 +1,24 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-pymysql
-alembic
-python-dotenv
-pydantic[email]
-pydantic-settings
-python-jose
-passlib[bcrypt]
-python-multipart
-cryptography
+# Framework web
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+
+# Base de datos
+sqlalchemy==2.0.40
+pymysql==1.1.1
+alembic==1.15.2
+
+# Configuracion
+python-dotenv==1.1.0
+pydantic[email]==2.11.3
+pydantic-settings==2.9.1
+
+# Autenticacion JWT
+python-jose[cryptography]==3.4.0
+python-multipart==0.0.20
+
+# Hash de contraseñas - VERSIONES COMPATIBLES
+passlib==1.7.4
+bcrypt==4.2.1
+
+# Utilidades
+cryptography==44.0.2

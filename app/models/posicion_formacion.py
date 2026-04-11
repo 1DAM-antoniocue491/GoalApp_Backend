@@ -1,37 +1,36 @@
 # app/models/posicion_formacion.py
 """
-Modelo de Posición en Formación para definir roles en el esquema táctico.
-Define las posiciones específicas dentro de una formación.
+Modelo de PosicionFormacion para definir las posiciones del campo de fútbol.
+Define las posiciones genéricas que pueden usarse en alineaciones (portero, defensa, etc.).
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from ..database.connection import Base
 
 
 class PosicionFormacion(Base):
     """
-    Modelo ORM para la tabla 'posiciones_formacion'.
-    
-    Define las posiciones específicas dentro de una formación táctica.
-    Por ejemplo, en un 4-4-2: "Defensa Central Izquierdo", "Lateral Derecho", etc.
-    
+    Modelo ORM para la tabla 'posicion_formacion'.
+
+    Define las posiciones genéricas del campo de fútbol que pueden utilizarse
+    en las alineaciones de los partidos. Ejemplos: "Portero", "Defensa Central",
+    "Lateral Izquierdo", "Mediocentro", "Extremo Derecho", "Delantero Centro".
+
     Attributes:
         id_posicion (int): Identificador único de la posición (Primary Key)
-        id_formacion (int): ID de la formación a la que pertenece (Foreign Key)
-        nombre (str): Nombre de la posición específica (máx. 50 caracteres)
+        nombre (str): Nombre de la posición (máx. 50 caracteres)
+        descripcion (str): Descripción opcional de la posición (máx. 255 caracteres)
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización
     """
-    __tablename__ = "posiciones_formacion"
+    __tablename__ = "posicion_formacion"
 
     # Clave primaria
     id_posicion = Column(Integer, primary_key=True)
-    
-    # Relación: formación a la que pertenece
-    id_formacion = Column(Integer, ForeignKey("formaciones.id_formacion"), nullable=False)
 
     # Información de la posición
-    nombre = Column(String(50), nullable=False)  # Ejemplo: "Defensa Central Izquierdo", "Extremo Derecho"
+    nombre = Column(String(50), nullable=False)  # Ejemplo: "Portero", "Defensa Central", "Extremo Derecho"
+    descripcion = Column(String(255), nullable=True)  # Descripción opcional
 
     # Auditoría: fechas de creación y actualización
     # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6

@@ -56,6 +56,7 @@ class Partido(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
-    liga = relationship("Liga", lazy="selectin")
-    equipo_local = relationship("Equipo", foreign_keys=[id_equipo_local], lazy="selectin")
-    equipo_visitante = relationship("Equipo", foreign_keys=[id_equipo_visitante], lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    liga = relationship("Liga", lazy="raise")
+    equipo_local = relationship("Equipo", foreign_keys=[id_equipo_local], lazy="raise")
+    equipo_visitante = relationship("Equipo", foreign_keys=[id_equipo_visitante], lazy="raise")
