@@ -44,5 +44,6 @@ class ConvocatoriaPartido(Base):
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relaciones ORM
-    partido = relationship("Partido", lazy="selectin")
-    jugador = relationship("Jugador", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    partido = relationship("Partido", lazy="raise")
+    jugador = relationship("Jugador", lazy="raise")

@@ -25,6 +25,9 @@ from .api.routers import (
     notificaciones,
     imagenes,
     convocatorias,
+    posiciones_formacion,
+    alineaciones,
+    tokens_recuperacion,
     public
 )
 
@@ -92,51 +95,61 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.datastructures import MutableHeaders
 
-# Orígenes permitidos (desarrollo)
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:8081",
-    "http://localhost:19006",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-]
 
 class CustomCORSMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware CORS configurable que lee orígenes permitidos desde settings.
+
+    Permite:
+    - Orígenes configurados en CORS_ORIGINS (variable de entorno)
+    - En desarrollo: cualquier localhost
+    - En producción: solo orígenes explícitamente configurados
+    """
+
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin", "")
-        print(f"[CORS] Origin: {origin}")
+
+        # Obtener orígenes configurados desde settings
+        configured_origins = settings.get_cors_origins_list()
 
         # Verificar si el origen está permitido
-        is_allowed = (
-            origin in ALLOWED_ORIGINS or
-            origin.startswith("http://localhost:") or
-            origin.startswith("http://127.0.0.1:")
-        )
-        print(f"[CORS] Is allowed: {is_allowed}")
+        if settings.ENVIRONMENT == "development":
+            # En desarrollo: permitir localhost y orígenes configurados
+            is_allowed = (
+                origin in configured_origins or
+                origin.startswith("http://localhost:") or
+                origin.startswith("http://127.0.0.1:") or
+                origin == ""  # Permitir requests sin origin (Postman, curl, etc.)
+            )
+        else:
+            # En producción: solo permitir orígenes configurados
+            is_allowed = origin in configured_origins or origin == ""
+
+        # Log solo en desarrollo
+        if settings.ENVIRONMENT == "development":
+            print(f"[CORS] Origin: {origin}, Allowed: {is_allowed}")
 
         # Para preflight requests (OPTIONS)
         if request.method == "OPTIONS":
             response = Response()
             if is_allowed:
-                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
                 response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Allow-Methods"] = "*"
-                response.headers["Access-Control-Allow-Headers"] = "*"
-            print(f"[CORS] OPTIONS response headers: {dict(response.headers)}")
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
+                response.headers["Access-Control-Max-Age"] = "86400"  # 24 horas
             return response
 
         # Para requests normales
         response = await call_next(request)
 
-        # Añadir headers CORS
+        # Añadir headers CORS si el origen está permitido
         if is_allowed:
-            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
             response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "*"
-            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
 
-        print(f"[CORS] Response headers: {dict(response.headers)}")
         return response
 
 app.add_middleware(CustomCORSMiddleware)
@@ -209,6 +222,27 @@ app.include_router(
     convocatorias.router,
     prefix="/api/v1",
     tags=["Convocatorias"]
+)
+
+# Posiciones de Formación
+app.include_router(
+    posiciones_formacion.router,
+    prefix="/api/v1",
+    tags=["Posiciones de Formación"]
+)
+
+# Alineaciones
+app.include_router(
+    alineaciones.router,
+    prefix="/api/v1",
+    tags=["Alineaciones"]
+)
+
+# Tokens de Recuperación (administración)
+app.include_router(
+    tokens_recuperacion.router,
+    prefix="/api/v1",
+    tags=["Tokens de Recuperación"]
 )
 
 # Formaciones y notificaciones

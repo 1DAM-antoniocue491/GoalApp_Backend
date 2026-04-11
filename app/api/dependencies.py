@@ -2,9 +2,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
+from sqlalchemy.orm import joinedload
 
 from app.database.connection import SessionLocal
-from app.api.services.usuario_service import obtener_usuario_por_id
+from app.api.services.usuario_service import obtener_usuario_por_id_con_roles
 from app.schemas.usuario import UsuarioResponse
 from app.config import settings
 
@@ -56,7 +57,8 @@ def get_current_user(
     except (JWTError, ValueError):
         raise credenciales_invalidas
 
-    usuario = obtener_usuario_por_id(db, user_id)
+    # Cargar usuario con roles de forma explícita usando joinedload
+    usuario = obtener_usuario_por_id_con_roles(db, user_id)
 
     if usuario is None:
         raise credenciales_invalidas

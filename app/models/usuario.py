@@ -59,4 +59,5 @@ class Usuario(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones
-    roles = relationship("Rol", secondary="usuario_rol", back_populates="usuarios", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    roles = relationship("Rol", secondary="usuario_rol", back_populates="usuarios", lazy="raise")

@@ -47,4 +47,5 @@ class Notificacion(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
-    usuario = relationship("Usuario", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    usuario = relationship("Usuario", lazy="raise")

@@ -42,5 +42,6 @@ class UsuarioSigueLiga(Base):
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relaciones ORM
-    usuario = relationship("Usuario", lazy="selectin")
-    liga = relationship("Liga", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    usuario = relationship("Usuario", lazy="raise")
+    liga = relationship("Liga", lazy="raise")

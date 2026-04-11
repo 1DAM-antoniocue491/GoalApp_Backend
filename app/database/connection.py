@@ -16,14 +16,20 @@ if settings.DATABASE_URL.startswith("sqlite"):
         connect_args={"check_same_thread": False}  # Necesario para SQLite en FastAPI
     )
 else:
-    # MySQL
+    # MySQL - Configuración optimizada para Render
     engine = create_engine(
         settings.DATABASE_URL,
         echo=settings.DATABASE_ECHO,
-        pool_pre_ping=True,
-        pool_recycle=3600,  # Reciclar conexiones cada hora
-        pool_size=10,  # Número de conexiones en el pool
-        max_overflow=20  # Conexiones adicionales si se agota el pool
+        pool_pre_ping=True,  # Verificar que la conexión esté viva antes de usar
+        pool_recycle=300,     # Reciclar conexiones cada 5 minutos (más agresivo para Render)
+        pool_size=5,          # Pool más pequeño para Render (5 conexiones base)
+        max_overflow=5,       # Hasta 10 conexiones totales en pico
+        pool_timeout=30,      # Timeout de 30s para obtener conexión del pool
+        connect_args={
+            "connect_timeout": 10,  # Timeout de conexión de 10s
+            "read_timeout": 30,     # Timeout de lectura de 30s
+            "write_timeout": 30      # Timeout de escritura de 30s
+        }
     )
 
 # Crea la fábrica de sesiones

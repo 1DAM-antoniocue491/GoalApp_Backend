@@ -128,15 +128,32 @@ def obtener_usuarios(db: Session):
 def obtener_usuario_por_id(db: Session, usuario_id: int):
     """
     Busca un usuario por su ID.
-    
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         usuario_id (int): ID del usuario a buscar
-    
+
     Returns:
         Usuario: Objeto Usuario si existe, None si no se encuentra
     """
     return db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+
+
+def obtener_usuario_por_id_con_roles(db: Session, usuario_id: int):
+    """
+    Busca un usuario por su ID incluyendo sus roles (eager loading).
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        usuario_id (int): ID del usuario a buscar
+
+    Returns:
+        Usuario: Objeto Usuario con roles cargados si existe, None si no se encuentra
+    """
+    from sqlalchemy.orm import joinedload
+    return db.query(Usuario).options(
+        joinedload(Usuario.roles)
+    ).filter(Usuario.id_usuario == usuario_id).first()
 
 
 def actualizar_usuario(db: Session, usuario_id: int, datos: UsuarioUpdate):

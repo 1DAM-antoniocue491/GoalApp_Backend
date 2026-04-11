@@ -51,4 +51,5 @@ class LigaConfiguracion(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
-    liga = relationship("Liga", back_populates="configuracion", lazy="selectin")
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    liga = relationship("Liga", back_populates="configuracion", lazy="raise")

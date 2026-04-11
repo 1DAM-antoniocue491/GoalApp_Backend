@@ -75,11 +75,13 @@ CREATE TABLE liga_configuracion (
 CREATE TABLE equipos (
     id_equipo INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
+    ciudad VARCHAR(255),
     escudo VARCHAR(255),
     colores VARCHAR(50),
     id_liga INT NOT NULL,
     id_entrenador INT NOT NULL,
     id_delegado INT NOT NULL,
+    estadio VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL,
     FOREIGN KEY (id_liga) REFERENCES ligas(id_liga),
