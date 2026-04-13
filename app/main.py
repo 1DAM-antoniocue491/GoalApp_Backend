@@ -98,57 +98,33 @@ from starlette.datastructures import MutableHeaders
 
 class CustomCORSMiddleware(BaseHTTPMiddleware):
     """
-    Middleware CORS configurable que lee orígenes permitidos desde settings.
+    Middleware CORS que permite cualquier origen.
 
-    Permite:
-    - Orígenes configurados en CORS_ORIGINS (variable de entorno)
-    - En desarrollo: cualquier localhost
-    - En producción: solo orígenes explícitamente configurados
+    Devuelve el origen de la petición en Access-Control-Allow-Origin
+    para ser compatible con credenciales (cookies, Authorization header).
     """
 
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin", "")
 
-        # Obtener orígenes configurados desde settings
-        configured_origins = settings.get_cors_origins_list()
-
-        # Verificar si el origen está permitido
-        if settings.ENVIRONMENT == "development":
-            # En desarrollo: permitir localhost y orígenes configurados
-            is_allowed = (
-                origin in configured_origins or
-                origin.startswith("http://localhost:") or
-                origin.startswith("http://127.0.0.1:") or
-                origin == ""  # Permitir requests sin origin (Postman, curl, etc.)
-            )
-        else:
-            # En producción: solo permitir orígenes configurados
-            is_allowed = origin in configured_origins or origin == ""
-
-        # Log solo en desarrollo
-        if settings.ENVIRONMENT == "development":
-            print(f"[CORS] Origin: {origin}, Allowed: {is_allowed}")
-
         # Para preflight requests (OPTIONS)
         if request.method == "OPTIONS":
             response = Response()
-            if is_allowed:
-                response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
-                response.headers["Access-Control-Allow-Credentials"] = "true"
-                response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-                response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
-                response.headers["Access-Control-Max-Age"] = "86400"  # 24 horas
+            response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
+            response.headers["Access-Control-Max-Age"] = "86400"  # 24 horas
             return response
 
         # Para requests normales
         response = await call_next(request)
 
-        # Añadir headers CORS si el origen está permitido
-        if is_allowed:
-            response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
+        # Siempre añadir headers CORS
+        response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
 
         return response
 
