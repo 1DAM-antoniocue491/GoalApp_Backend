@@ -39,8 +39,7 @@ class ConvocatoriaPartido(Base):
     es_titular = Column(Boolean, nullable=False, default=False)  # False = suplente
 
     # Auditoría: fecha de creación
-    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
-    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relaciones ORM

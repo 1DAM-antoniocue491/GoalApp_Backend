@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.evento_partido import EventoPartido
 from app.models.partido import Partido
 from app.models.usuario_rol import UsuarioRol
+from app.models.rol import Rol
 from app.schemas.eventos import EventoPartidoCreate
 
 
@@ -39,9 +40,13 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     equipo_local = partido.equipo_local
 
     # Verificar que el usuario tiene el rol de delegate
+    rol_delegate = db.query(Rol).filter(Rol.nombre == "delegate").first()
+    if not rol_delegate:
+        raise ValueError("Rol 'delegate' no encontrado")
+
     usuario_rol = db.query(UsuarioRol).filter(
         UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_rol == 5  # ID del rol 'delegate'
+        UsuarioRol.id_rol == rol_delegate.id_rol
     ).first()
 
     if not usuario_rol:

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     3. NUNCA subas el archivo .env a Git (está en .gitignore)
     
     Attributes:
-        DATABASE_URL (str): URL de conexión a MySQL
+        DATABASE_URL (str): URL de conexión a PostgreSQL
         DATABASE_ECHO (bool): Si mostrar queries SQL en consola
         SECRET_KEY (str): Clave secreta para JWT (64 bytes)
         ALGORITHM (str): Algoritmo de encriptación JWT (HS256)

@@ -44,10 +44,10 @@ async def lifespan(app: FastAPI):
     """
     # Startup: Crear tablas si no existen
     print("[INFO] Iniciando aplicación...")
-    # Mostrar URL de base de datos (ocultar credenciales si es MySQL)
+    # Mostrar URL de base de datos (ocultar credenciales si contiene @)
     db_url = settings.DATABASE_URL
     if '@' in db_url:
-        # MySQL/PostgreSQL con credenciales: mostrar solo host/db
+        # Base de datos con credenciales: mostrar solo host/db
         print(f"[INFO] Conectando a base de datos: {db_url.split('@')[1]}")
     else:
         # SQLite: mostrar toda la URL (no tiene credenciales)

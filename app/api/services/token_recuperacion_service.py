@@ -5,7 +5,7 @@ Maneja operaciones de gestión de tokens de recuperación de contraseña.
 """
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.token_recuperacion import TokenRecuperacion
 from app.models.usuario import Usuario
@@ -61,7 +61,7 @@ def obtener_tokens_activos(db: Session) -> List[TokenRecuperacion]:
     Returns:
         List[TokenRecuperacion]: Lista de tokens activos
     """
-    ahora = datetime.utcnow()
+    ahora = datetime.now(timezone.utc)
     return db.query(TokenRecuperacion).filter(
         TokenRecuperacion.usado == False,
         TokenRecuperacion.fecha_expiracion > ahora
@@ -78,7 +78,7 @@ def obtener_tokens_expirados(db: Session) -> List[TokenRecuperacion]:
     Returns:
         List[TokenRecuperacion]: Lista de tokens expirados
     """
-    ahora = datetime.utcnow()
+    ahora = datetime.now(timezone.utc)
     return db.query(TokenRecuperacion).filter(
         TokenRecuperacion.fecha_expiracion <= ahora
     ).order_by(TokenRecuperacion.created_at.desc()).all()
@@ -153,7 +153,7 @@ def limpiar_tokens_expirados(db: Session) -> int:
     Returns:
         int: Número de tokens eliminados
     """
-    ahora = datetime.utcnow()
+    ahora = datetime.now(timezone.utc)
     resultado = db.query(TokenRecuperacion).filter(
         TokenRecuperacion.fecha_expiracion <= ahora
     ).delete()
@@ -194,7 +194,7 @@ def obtener_estadisticas_tokens(db: Session) -> dict:
     Returns:
         dict: Estadísticas de tokens (total, activos, usados, expirados)
     """
-    ahora = datetime.utcnow()
+    ahora = datetime.now(timezone.utc)
 
     total = db.query(TokenRecuperacion).count()
     usados = db.query(TokenRecuperacion).filter(TokenRecuperacion.usado == True).count()

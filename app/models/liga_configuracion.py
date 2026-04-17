@@ -3,6 +3,7 @@
 Modelo de Configuración de Liga para gestionar parámetros de cada liga.
 Define la configuración específica de cada competición (horarios, límites, etc.).
 """
+from datetime import time as time_type
 from sqlalchemy import Column, Integer, Time, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -39,14 +40,13 @@ class LigaConfiguracion(Base):
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False, unique=True)
 
     # Configuración de la liga
-    hora_partidos = Column(Time, nullable=False, default="17:00:00")
+    hora_partidos = Column(Time, nullable=False, default=time_type(17, 0))
     max_equipos = Column(Integer, nullable=False, default=20)
     min_jugadores_equipo = Column(Integer, nullable=False, default=7)
     min_partidos_entre_equipos = Column(Integer, nullable=False, default=2)
 
     # Auditoría: fechas de creación y actualización
-    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
-    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 

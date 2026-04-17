@@ -2,7 +2,7 @@
 """
 Tests para el módulo de partidos.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 # ============================================================
@@ -21,7 +21,7 @@ class TestCrearPartido:
                 "id_liga": liga_ejemplo.id_liga,
                 "id_equipo_local": equipo_ejemplo.id_equipo,
                 "id_equipo_visitante": equipo2_ejemplo.id_equipo,
-                "fecha": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+                "fecha": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
                 "estado": "programado"
             }
         )
@@ -39,7 +39,7 @@ class TestCrearPartido:
                 "id_liga": liga_ejemplo.id_liga,
                 "id_equipo_local": equipo_ejemplo.id_equipo,
                 "id_equipo_visitante": equipo2_ejemplo.id_equipo,
-                "fecha": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+                "fecha": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
                 "estado": "programado"
             }
         )
@@ -55,7 +55,7 @@ class TestCrearPartido:
                 "id_liga": liga_ejemplo.id_liga,
                 "id_equipo_local": equipo_ejemplo.id_equipo,
                 "id_equipo_visitante": equipo_ejemplo.id_equipo,
-                "fecha": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+                "fecha": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
                 "estado": "programado"
             }
         )
@@ -72,7 +72,7 @@ class TestCrearPartido:
                 "id_liga": 999,
                 "id_equipo_local": equipo_ejemplo.id_equipo,
                 "id_equipo_visitante": equipo2_ejemplo.id_equipo,
-                "fecha": (datetime.utcnow() + timedelta(days=7)).isoformat(),
+                "fecha": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
                 "estado": "programado"
             }
         )

@@ -50,8 +50,7 @@ class Equipo(Base):
     estadio = Column(String(255), nullable=True)  # Nombre del estadio (opcional)
 
     # Auditoría: fechas de creación y actualización
-    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
-    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 

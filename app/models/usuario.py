@@ -47,14 +47,13 @@ class Usuario(Base):
     contraseña_hash = Column(String(255), nullable=False)  # Almacenado con bcrypt
 
     # Información opcional del perfil
-    genero = Column(Enum(GeneroEnum), nullable=True)  # Género del usuario
+    genero = Column(Enum(GeneroEnum, name="genero_enum", create_constraint=False), nullable=True)  # Género del usuario
     telefono = Column(String(20), nullable=True)  # Número de teléfono
     fecha_nacimiento = Column(Date, nullable=True)  # Fecha de nacimiento
     imagen_url = Column(String(255), nullable=True)  # URL de la imagen de perfil
 
     # Auditoría: fechas de creación y actualización
-    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
-    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 

@@ -138,7 +138,7 @@ class UsuarioBase(BaseModel):
     email: EmailStr                # Debe ser email valido
 ```
 
-### MySQL
+### PostgreSQL
 Base de datos relacional donde se almacenan todos los datos.
 
 ### JWT (JSON Web Tokens)
@@ -154,7 +154,7 @@ El archivo `.env` contiene las variables de configuracion sensibles:
 
 ```env
 # Base de Datos
-DATABASE_URL=mysql+pymysql://usuario:password@localhost:3306/futbol_app
+DATABASE_URL=postgresql+psycopg2://usuario:password@localhost:5432/futbol_app
 DATABASE_ECHO=True
 
 # Seguridad JWT
@@ -180,7 +180,7 @@ LOG_LEVEL=INFO
 
 | Variable                      | Descripcion                                      |
 | ----------------------------- | ------------------------------------------------ |
-| `DATABASE_URL`                | Direccion de conexion a MySQL                    |
+| `DATABASE_URL`                | Direccion de conexion a PostgreSQL                    |
 | `SECRET_KEY`                  | Clave secreta para firmar tokens (no compartir!) |
 | `ALGORITHM`                   | Algoritmo de encriptacion (HS256)                |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Tiempo de vida del token (60 min)                |
@@ -777,7 +777,7 @@ Marcar como leida.
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
 │   Cliente    │────>│   API REST   │────>│ Base Datos   │
-│  (App Móvil) │     │  (FastAPI)   │     │   (MySQL)    │
+│  (App Móvil) │     │  (FastAPI)   │     │ (PostgreSQL) │
 └──────────────┘     └──────────────┘     └──────────────┘
        │                    │                     │
        │  1. Login          │                     │
@@ -997,7 +997,7 @@ class JugadorResponse(BaseModel):
                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │                    BASE DE DATOS                        │
-│                        (MySQL)                          │
+│                     (PostgreSQL)                         │
 └─────────────────────────────────────────────────────────┘
 ```
 

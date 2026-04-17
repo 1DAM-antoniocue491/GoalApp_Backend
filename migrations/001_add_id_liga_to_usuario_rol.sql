@@ -3,6 +3,7 @@
 --              to have different roles in different leagues.
 -- Author: System
 -- Date: 2026-04-10
+-- Compatible with: PostgreSQL
 
 -- IMPORTANT: Run this migration in the following order:
 -- 1. Add id_liga column with NULL allowed
@@ -40,7 +41,7 @@ WHERE id_liga IS NULL;
 -- ============================================================
 
 ALTER TABLE usuario_rol
-MODIFY COLUMN id_liga INT NOT NULL;
+ALTER COLUMN id_liga SET NOT NULL;
 
 -- ============================================================
 -- STEP 4: Add foreign key constraint
@@ -58,19 +59,19 @@ ON UPDATE CASCADE;
 -- ============================================================
 
 -- Check the table structure
--- DESCRIBE usuario_rol;
+-- \d usuario_rol;
 
 -- Check that all records have id_liga assigned
 -- SELECT COUNT(*) FROM usuario_rol WHERE id_liga IS NULL;  -- Should return 0
 
 -- Verify foreign key constraint exists
--- SELECT * FROM information_schema.TABLE_CONSTRAINTS
--- WHERE TABLE_NAME = 'usuario_rol' AND CONSTRAINT_TYPE = 'FOREIGN KEY';
+-- SELECT * FROM information_schema.table_constraints
+-- WHERE table_name = 'usuario_rol' AND constraint_type = 'FOREIGN KEY';
 
 -- ============================================================
 -- ROLLBACK (in case you need to revert this migration)
 -- ============================================================
 
 -- To rollback, run:
--- ALTER TABLE usuario_rol DROP FOREIGN KEY fk_usuario_rol_liga;
+-- ALTER TABLE usuario_rol DROP CONSTRAINT fk_usuario_rol_liga;
 -- ALTER TABLE usuario_rol DROP COLUMN id_liga;

@@ -5,7 +5,7 @@ con hashing bcrypt, y asignación de roles.
 """
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 
 from app.models.usuario import Usuario
@@ -325,7 +325,7 @@ def crear_token_recuperacion(db: Session, usuario_id: int) -> str:
     token = secrets.token_urlsafe(32)
 
     # Calcular fecha de expiración
-    fecha_expiracion = datetime.utcnow() + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
+    fecha_expiracion = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
 
     # Crear registro en base de datos
     token_recuperacion = TokenRecuperacion(
@@ -362,7 +362,7 @@ def validar_token_recuperacion(db: Session, token: str) -> Usuario | None:
     token_db = db.query(TokenRecuperacion).filter(
         TokenRecuperacion.token == token,
         TokenRecuperacion.usado == False,
-        TokenRecuperacion.fecha_expiracion > datetime.utcnow()
+        TokenRecuperacion.fecha_expiracion > datetime.now(timezone.utc)
     ).first()
 
     if not token_db:

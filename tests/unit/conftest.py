@@ -22,7 +22,7 @@ from app.models.jugador import Jugador
 from app.models.partido import Partido
 from app.models.notificacion import Notificacion
 from app.api.services.usuario_service import hash_password
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 # ============================================================
@@ -309,7 +309,7 @@ def partido_ejemplo(db, liga_ejemplo, equipo_ejemplo, equipo2_ejemplo):
         id_liga=liga_ejemplo.id_liga,
         id_equipo_local=equipo_ejemplo.id_equipo,
         id_equipo_visitante=equipo2_ejemplo.id_equipo,
-        fecha=datetime.utcnow() + timedelta(days=7),
+        fecha=datetime.now(timezone.utc) + timedelta(days=7),
         estado="programado"
     )
     db.add(partido)

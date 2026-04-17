@@ -35,12 +35,11 @@ class TokenRecuperacion(Base):
 
     # Token de recuperación
     token = Column(String(255), nullable=False, unique=True, index=True)
-    fecha_expiracion = Column(DateTime, nullable=False)
+    fecha_expiracion = Column(DateTime(timezone=True), nullable=False)
     usado = Column(Boolean, nullable=False, default=False)
 
     # Auditoría: fecha de creación
-    # Usamos default=func.now() en lugar de server_default para compatibilidad con MySQL 5.5/5.6
-    # que no soportan DEFAULT CURRENT_TIMESTAMP para columnas DATETIME
+    # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
 
     # Relaciones ORM
