@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Liga.
 Maneja operaciones CRUD de ligas/competiciones, incluyendo gestión de
 nombres y temporadas, y asignación automática del rol admin al creador.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, noload
 from typing import List
 from collections import defaultdict
 
@@ -15,6 +15,15 @@ from app.models.rol import Rol
 from app.models.usuario_rol import UsuarioRol
 from app.schemas.liga import LigaCreate, LigaUpdate
 from app.schemas.clasificacion import ClasificacionItem
+
+
+def _refresh_liga(db: Session, liga_id: int) -> Liga:
+    """Recarga una liga desde la BD sin cargar relaciones lazy."""
+    return db.query(Liga).options(
+        noload(Liga.equipos),
+        noload(Liga.configuracion),
+        noload(Liga.usuario_roles),
+    ).filter(Liga.id_liga == liga_id).one()
 
 
 def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
@@ -65,8 +74,7 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
                 db.add(usuario_rol)
 
     db.commit()
-    db.refresh(liga)
-    return liga
+    return _refresh_liga(db, liga.id_liga)
 
 
 def obtener_ligas(db: Session):
@@ -79,7 +87,11 @@ def obtener_ligas(db: Session):
     Returns:
         list[Liga]: Lista con todas las ligas
     """
-    return db.query(Liga).all()
+    return db.query(Liga).options(
+        noload(Liga.equipos),
+        noload(Liga.configuracion),
+        noload(Liga.usuario_roles),
+    ).all()
 
 
 def obtener_liga_por_id(db: Session, liga_id: int):
@@ -93,7 +105,11 @@ def obtener_liga_por_id(db: Session, liga_id: int):
     Returns:
         Liga: Objeto Liga si existe, None si no se encuentra
     """
-    return db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    return db.query(Liga).options(
+        noload(Liga.equipos),
+        noload(Liga.configuracion),
+        noload(Liga.usuario_roles),
+    ).filter(Liga.id_liga == liga_id).first()
 
 
 def actualizar_liga(db: Session, liga_id: int, datos: LigaUpdate):
@@ -126,25 +142,56 @@ def actualizar_liga(db: Session, liga_id: int, datos: LigaUpdate):
         liga.activa = datos.activa
 
     db.commit()
-    db.refresh(liga)
-    return liga
+    return _refresh_liga(db, liga.id_liga)
 
 
-def reactivar_liga(db: Session, liga_id: int) -> Liga:
+def verificar_admin_liga(db: Session, liga_id: int, id_usuario: int) -> None:
+    """
+    Verifica que el usuario sea administrador de la liga indicada.
+
+    Busca en la tabla usuario_rol si existe una asignación con rol "admin"
+    para el usuario y la liga proporcionados.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+        id_usuario (int): ID del usuario
+
+    Raises:
+        PermissionError: Si el usuario no es admin de la liga
+    """
+    rol_admin = db.query(Rol).filter(Rol.nombre == "admin").first()
+    if not rol_admin:
+        raise PermissionError("No tienes permisos para realizar esta acción en esta liga")
+
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == id_usuario,
+        UsuarioRol.id_rol == rol_admin.id_rol,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise PermissionError("No tienes permisos para realizar esta acción en esta liga")
+
+
+def reactivar_liga(db: Session, liga_id: int, id_usuario: int = None) -> Liga:
     """
     Reactiva una liga que estaba inactiva.
 
     Solo permite reactivar si la liga está inactiva.
+    Si se proporciona id_usuario, verifica que sea admin de la liga.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         liga_id (int): ID de la liga a reactivar
+        id_usuario (int, optional): ID del usuario que ejecuta la acción
 
     Returns:
         Liga: Objeto Liga reactivado
 
     Raises:
         ValueError: Si la liga no existe o ya está activa
+        PermissionError: Si el usuario no es admin de la liga
     """
     liga = obtener_liga_por_id(db, liga_id)
     if not liga:
@@ -153,10 +200,13 @@ def reactivar_liga(db: Session, liga_id: int) -> Liga:
     if liga.activa:
         raise ValueError("La liga ya está activa")
 
+    # Verificar permisos si se proporcionó el usuario
+    if id_usuario is not None:
+        verificar_admin_liga(db, liga_id, id_usuario)
+
     liga.activa = True
     db.commit()
-    db.refresh(liga)
-    return liga
+    return _refresh_liga(db, liga.id_liga)
 
 
 def desactivar_liga(db: Session, liga_id: int) -> Liga:
@@ -184,8 +234,7 @@ def desactivar_liga(db: Session, liga_id: int) -> Liga:
 
     liga.activa = False
     db.commit()
-    db.refresh(liga)
-    return liga
+    return _refresh_liga(db, liga.id_liga)
 
 
 def eliminar_liga(db: Session, liga_id: int):

@@ -26,7 +26,7 @@ router = APIRouter(
     tags=["Ligas"]  # Agrupación en documentación
 )
 
-@router.post("/", response_model=LigaResponse, dependencies=[Depends(require_role("admin"))])
+@router.post("/", response_model=LigaResponse)
 def crear_liga_router(liga: LigaCreate, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Crear una nueva liga.
@@ -164,33 +164,37 @@ def obtener_clasificacion_router(liga_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, str(e))
 
 @router.put("/{liga_id}/reactivar", response_model=LigaResponse, dependencies=[Depends(require_role("admin"))])
-def reactivar_liga_router(liga_id: int, db: Session = Depends(get_db)):
+def reactivar_liga_router(liga_id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Reactivar una liga inactiva.
 
     Cambia el estado de una liga de inactiva a activa. Solo los administradores
-    pueden realizar esta acción.
+    de la liga pueden realizar esta acción.
 
     Parámetros:
         - liga_id (int): ID de la liga a reactivar (path parameter)
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado (se obtiene del token JWT)
 
     Returns:
         LigaResponse: Información de la liga reactivada
 
     Requiere autenticación: Sí
-    Roles permitidos: Admin
+    Roles permitidos: Admin de la liga
 
     Raises:
         HTTPException 404: Si la liga no existe
         HTTPException 400: Si la liga ya está activa
+        HTTPException 403: Si el usuario no es admin de la liga
     """
     try:
-        return reactivar_liga(db, liga_id)
+        return reactivar_liga(db, liga_id, id_usuario=current_user.id_usuario)
     except ValueError as e:
         if "no encontrada" in str(e):
             raise HTTPException(404, str(e))
         raise HTTPException(400, str(e))
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
 
 @router.put("/{liga_id}/desactivar", response_model=LigaResponse, dependencies=[Depends(require_role("admin"))])
 def desactivar_liga_router(liga_id: int, db: Session = Depends(get_db)):

@@ -2,6 +2,7 @@
 """
 Tests para verificación de permisos por rol.
 """
+import pytest
 
 
 # ============================================================

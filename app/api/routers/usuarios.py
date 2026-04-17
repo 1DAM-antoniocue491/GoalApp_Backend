@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role, get_current_user
+from app.models.usuario import Usuario
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioResponse, LigaConRolResponse
 from app.schemas.seguimiento import SeguimientoResponse, LigaSeguidaResponse
 from app.api.services.usuario_service import (
@@ -71,6 +72,18 @@ def listar_usuarios(db: Session = Depends(get_db)):
     Roles permitidos: Admin
     """
     return obtener_usuarios(db)
+
+@router.get("/me", response_model=UsuarioResponse)
+def obtener_usuario_actual(current_user: Usuario = Depends(get_current_user)):
+    """
+    Obtener el usuario autenticado actualmente.
+
+    Devuelve la información del usuario asociado al token JWT.
+
+    Requiere autenticación: Sí
+    Roles permitidos: Todos los usuarios autenticados
+    """
+    return current_user
 
 @router.get("/{usuario_id}", response_model=UsuarioResponse)
 def obtener_usuario(usuario_id: int, db: Session = Depends(get_db)):

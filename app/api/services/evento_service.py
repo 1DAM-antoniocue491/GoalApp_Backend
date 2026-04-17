@@ -3,7 +3,7 @@ Servicios de lógica de negocio para EventoPartido.
 Maneja la gestión de eventos de partido (goles, tarjetas, sustituciones, etc.)
 y su registro en la base de datos.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.evento_partido import EventoPartido
 from app.models.partido import Partido
 from app.models.usuario_rol import UsuarioRol
@@ -31,7 +31,7 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
         ValueError: Si el usuario no es delegado del equipo local
     """
     # Obtener el partido
-    partido = db.query(Partido).filter(Partido.id_partido == datos.id_partido).first()
+    partido = db.query(Partido).filter(Partido.id_partido == datos.id_partido).options(joinedload(Partido.equipo_local)).first()
     if not partido:
         raise ValueError("Partido no encontrado")
 

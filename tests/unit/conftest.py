@@ -234,9 +234,9 @@ def liga_configuracion_ejemplo(db, liga_ejemplo):
         hora_partidos=time(17, 0),
         max_equipos=20,
         min_partidos_entre_equipos=2,
-        min_jugadores_convocados=11,
-        max_jugadores_convocados=18,
-        num_titulares=11
+        min_convocados=14,
+        max_convocados=22,
+        min_plantilla=11
     )
     db.add(configuracion)
     db.commit()

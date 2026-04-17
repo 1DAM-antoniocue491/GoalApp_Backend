@@ -135,7 +135,7 @@ def obtener_jornada_publica(
         raise HTTPException(404, "Liga no encontrada")
 
     # Obtener todas las fechas únicas de partidos ordenadas
-    fechas = db.query(func.date(func.timezone('UTC', Partido.fecha))).filter(
+    fechas = db.query(func.date(Partido.fecha)).filter(
         Partido.id_liga == liga_id
     ).distinct().order_by(Partido.fecha).all()
 
@@ -148,7 +148,7 @@ def obtener_jornada_publica(
     fecha_jornada = fechas_ordenadas[jornada - 1]
     partidos = db.query(Partido).filter(
         Partido.id_liga == liga_id,
-        func.date(func.timezone('UTC', Partido.fecha)) == fecha_jornada
+        func.date(Partido.fecha) == fecha_jornada
     ).all()
 
     return partidos

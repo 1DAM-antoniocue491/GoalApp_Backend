@@ -1,56 +1,80 @@
 # app/api/services/email_service.py
 """
 Servicio de envío de emails para notificaciones del sistema.
-Gestiona el envío de emails mediante SMTP para recuperación de contraseña
-y otras notificaciones.
+Gestiona el envío de emails mediante SMTP usando plantillas Jinja2.
 """
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from datetime import datetime
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader
 
 from app.config import settings
+
+# ── Configuración de Jinja2 ──
+TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates" / "emails"
+jinja_env = Environment(
+    loader=FileSystemLoader(str(TEMPLATES_DIR)),
+    autoescape=True,
+)
+
+
+def _render_template(template_name: str, context: dict) -> str:
+    """Renderiza una plantilla Jinja2 con el contexto dado."""
+    template = jinja_env.get_template(template_name)
+    return template.render(**context)
+
+
+def _get_fecha_hora() -> tuple[str, str]:
+    """Devuelve la fecha y hora actual formateadas en español."""
+    now = datetime.now()
+    meses = [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    ]
+    fecha = f"{now.day} de {meses[now.month - 1]} de {now.year}"
+    hora = now.strftime("%H:%M")
+    return fecha, hora
 
 
 def enviar_email_recuperacion(
     email_destino: str,
     token: str,
-    nombre_usuario: str
+    nombre_usuario: str,
 ) -> bool:
     """
     Envía un email de recuperación de contraseña al usuario.
 
-    Construye un email HTML con el enlace de recuperación y lo envía
-    mediante el servidor SMTP configurado.
-
     Args:
-        email_destino (str): Email del usuario que solicita recuperación
-        token (str): Token de recuperación generado
-        nombre_usuario (str): Nombre del usuario para personalizar el email
+        email_destino: Email del usuario que solicita recuperación
+        token: Token de recuperación generado
+        nombre_usuario: Nombre del usuario para personalizar el email
 
     Returns:
         bool: True si el email se envió correctamente, False en caso contrario
     """
-    # Verificar que SMTP esté configurado
-    if not settings.SMTP_HOST or not settings.SMTP_USER:
-        # En desarrollo, simular envío exitoso
-        print(f"[DEV] Email de recuperación para {email_destino}")
-        print(f"[DEV] Token: {token}")
-        print(f"[DEV] Enlace: {settings.FRONTEND_URL}/reset-password?token={token}")
-        return True
+    url_recuperacion = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    fecha, hora = _get_fecha_hora()
 
-    try:
-        # Construir el mensaje
-        mensaje = MIMEMultipart("alternative")
-        mensaje["Subject"] = "Recuperación de contraseña - GoalApp"
-        mensaje["From"] = settings.EMAIL_FROM
-        mensaje["To"] = email_destino
+    # Contexto para la plantilla
+    context = {
+        "nombre_usuario": nombre_usuario,
+        "email": email_destino,
+        "enlace_recuperacion": url_recuperacion,
+        "minutos_expiracion": settings.RESET_TOKEN_EXPIRE_MINUTES,
+        "fecha": fecha,
+        "hora": hora,
+        "fecha_solicitud": f"{fecha}, {hora}",
+        "dispositivo": "Navegador web",
+    }
 
-        # URL de recuperación
-        url_recuperacion = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    # Renderizar plantilla HTML
+    html_content = _render_template("password_reset.html", context)
 
-        # Contenido en texto plano
-        texto_plano = f"""
+    # Texto plano como fallback
+    texto_plano = f"""
 Hola {nombre_usuario},
 
 Has solicitado recuperar tu contraseña en GoalApp.
@@ -64,59 +88,24 @@ Si no has solicitado este cambio, puedes ignorar este email.
 
 Saludos,
 Equipo de GoalApp
-        """
+    """
 
-        # Contenido HTML
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #4CAF50; color: white; padding: 20px; text-align: center; }}
-        .content {{ padding: 20px; }}
-        .button {{
-            display: inline-block;
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 4px;
-        }}
-        .footer {{ font-size: 12px; color: #666; margin-top: 20px; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>GoalApp</h1>
-        </div>
-        <div class="content">
-            <p>Hola <strong>{nombre_usuario}</strong>,</p>
-            <p>Has solicitado recuperar tu contraseña en GoalApp.</p>
-            <p>Para restablecer tu contraseña, haz clic en el siguiente botón:</p>
-            <p style="text-align: center;">
-                <a href="{url_recuperacion}" class="button">Restablecer contraseña</a>
-            </p>
-            <p>Este enlace expirará en <strong>{settings.RESET_TOKEN_EXPIRE_MINUTES} minutos</strong>.</p>
-            <p>Si no puedes hacer clic en el botón, copia y pega el siguiente enlace en tu navegador:</p>
-            <p style="word-break: break-all; font-size: 12px;">{url_recuperacion}</p>
-            <p>Si no has solicitado este cambio, puedes ignorar este email.</p>
-        </div>
-        <div class="footer">
-            <p>Saludos,<br>Equipo de GoalApp</p>
-        </div>
-    </div>
-</body>
-</html>
-        """
+    # Verificar que SMTP esté configurado
+    if not settings.SMTP_HOST or not settings.SMTP_USER:
+        print(f"[DEV] Email de recuperación para {email_destino}")
+        print(f"[DEV] Token: {token}")
+        print(f"[DEV] Enlace: {url_recuperacion}")
+        return True
 
-        # Adjuntar contenido
+    try:
+        mensaje = MIMEMultipart("alternative")
+        mensaje["Subject"] = "Recuperación de contraseña - GoalApp"
+        mensaje["From"] = settings.EMAIL_FROM
+        mensaje["To"] = email_destino
+
         mensaje.attach(MIMEText(texto_plano, "plain"))
-        mensaje.attach(MIMEText(html, "html"))
+        mensaje.attach(MIMEText(html_content, "html"))
 
-        # Conectar al servidor SMTP y enviar
         with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
             server.starttls()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
@@ -126,4 +115,114 @@ Equipo de GoalApp
 
     except Exception as e:
         print(f"Error enviando email de recuperación: {e}")
+        return False
+
+
+def enviar_email_invitacion(
+    email_destino: str,
+    nombre_invitado: str,
+    liga_nombre: str,
+    equipo_nombre: str,
+    rol: str,
+    dorsal: str,
+    posicion: str,
+    tipo_jugador: str,
+    invitador_nombre: str,
+    enlace_aceptar: str,
+    fecha_invitacion: str | None = None,
+) -> bool:
+    """
+    Envía un email de invitación a una liga.
+
+    Args:
+        email_destino: Email del usuario invitado
+        nombre_invitado: Nombre del invitado
+        liga_nombre: Nombre de la liga
+        equipo_nombre: Nombre del equipo
+        rol: Rol dentro de la liga
+        dorsal: Número de dorsal
+        posicion: Posición del jugador
+        tipo_jugador: Tipo de jugador (titular, suplente, etc.)
+        invitador_nombre: Nombre de quien invita
+        enlace_aceptar: Enlace para aceptar la invitación
+        fecha_invitacion: Fecha de la invitación (opcional)
+
+    Returns:
+        bool: True si el email se envió correctamente, False en caso contrario
+    """
+    fecha, hora = _get_fecha_hora()
+
+    # Iniciales del invitador
+    partes = invitador_nombre.strip().split()
+    if len(partes) >= 2:
+        invitador_iniciales = f"{partes[0][0]}{partes[-1][0]}".upper()
+    else:
+        invitador_iniciales = invitador_nombre[:2].upper()
+
+    context = {
+        "nombre_invitado": nombre_invitado,
+        "liga_nombre": liga_nombre,
+        "equipo_nombre": equipo_nombre,
+        "rol": rol,
+        "dorsal": dorsal,
+        "posicion": posicion,
+        "tipo_jugador": tipo_jugador,
+        "invitador_nombre": invitador_nombre,
+        "invitador_iniciales": invitador_iniciales,
+        "enlace_aceptar": enlace_aceptar,
+        "fecha": fecha,
+        "hora": hora,
+        "fecha_invitacion": fecha_invitacion or f"{fecha}, {hora}",
+    }
+
+    # Renderizar plantilla HTML
+    html_content = _render_template("invitation.html", context)
+
+    # Texto plano como fallback
+    texto_plano = f"""
+Hola {nombre_invitado},
+
+Has sido invitado a formar parte de la liga "{liga_nombre}" en GoalApp.
+
+Detalles:
+- Liga: {liga_nombre}
+- Equipo: {equipo_nombre}
+- Rol: {rol}
+- Dorsal: {dorsal}
+- Posición: {posicion}
+
+Para aceptar la invitación, visita el siguiente enlace:
+{enlace_aceptar}
+
+El enlace caduca en 7 días.
+
+Saludos,
+Equipo de GoalApp
+    """
+
+    # Verificar que SMTP esté configurado
+    if not settings.SMTP_HOST or not settings.SMTP_USER:
+        print(f"[DEV] Email de invitación para {email_destino}")
+        print(f"[DEV] Liga: {liga_nombre} | Equipo: {equipo_nombre}")
+        print(f"[DEV] Enlace: {enlace_aceptar}")
+        return True
+
+    try:
+        mensaje = MIMEMultipart("alternative")
+        mensaje["Subject"] = f"Invitación a {liga_nombre} — GoalApp"
+        mensaje["From"] = settings.EMAIL_FROM
+        mensaje["To"] = email_destino
+
+        mensaje.attach(MIMEText(texto_plano, "plain"))
+        mensaje.attach(MIMEText(html_content, "html"))
+
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+            server.starttls()
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
+
+        return True
+
+    except Exception as e:
+        print(f"Error enviando email de invitación: {e}")
         return False
