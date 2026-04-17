@@ -3,7 +3,7 @@
 Modelo de Liga para gestionar competiciones.
 Representa una liga o torneo con sus equipos y partidos.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
@@ -34,6 +34,7 @@ class Liga(Base):
     # Información de la liga
     nombre = Column(String(100), nullable=False, unique=True)  # Nombre único de la liga
     temporada = Column(String(20), nullable=False)  # Ejemplo: "2024/2025"
+    categoria = Column(String(50), nullable=True)  # Senior, Juvenil A, Cadete, etc.
     activa = Column(Boolean, nullable=False, default=True)  # Liga activa/inactiva
 
     # Auditoría: fechas de creación y actualización

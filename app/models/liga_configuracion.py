@@ -41,9 +41,16 @@ class LigaConfiguracion(Base):
 
     # Configuración de la liga
     hora_partidos = Column(Time, nullable=False, default=time_type(17, 0))
+    min_equipos = Column(Integer, nullable=False, default=2)
     max_equipos = Column(Integer, nullable=False, default=20)
+    min_convocados = Column(Integer, nullable=False, default=14)
+    max_convocados = Column(Integer, nullable=False, default=22)
+    min_plantilla = Column(Integer, nullable=False, default=11)
+    max_plantilla = Column(Integer, nullable=False, default=25)
     min_jugadores_equipo = Column(Integer, nullable=False, default=7)
     min_partidos_entre_equipos = Column(Integer, nullable=False, default=2)
+    minutos_partido = Column(Integer, nullable=False, default=90)
+    max_partidos = Column(Integer, nullable=False, default=30)
 
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends

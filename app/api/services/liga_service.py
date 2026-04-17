@@ -118,10 +118,10 @@ def actualizar_liga(db: Session, liga_id: int, datos: LigaUpdate):
     # Actualizar nombre si se proporciona
     if datos.nombre is not None:
         liga.nombre = datos.nombre
-    # Actualizar temporada si se proporciona
     if datos.temporada is not None:
         liga.temporada = datos.temporada
-    # Actualizar estado activa si se proporciona
+    if datos.categoria is not None:
+        liga.categoria = datos.categoria
     if datos.activa is not None:
         liga.activa = datos.activa
 
