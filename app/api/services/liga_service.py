@@ -46,9 +46,9 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
         temporada=datos.temporada,
         categoria=datos.categoria,
         activa=datos.activa,
-        cantidad_partidos=datos.cantidad_partidos,
-        duracion_partido=datos.duracion_partido,
-        logo_url=datos.logo_url
+        cantidad_partidos=getattr(datos, 'cantidad_partidos', None),
+        duracion_partido=getattr(datos, 'duracion_partido', None),
+        logo_url=getattr(datos, 'logo_url', None)
     )
     db.add(liga)
     db.flush()  # Obtener el ID de la liga sin hacer commit
