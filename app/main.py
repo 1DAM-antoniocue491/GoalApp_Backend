@@ -28,6 +28,7 @@ from .api.routers import (
     posiciones_formacion,
     alineaciones,
     tokens_recuperacion,
+    invitaciones,
     public
 )
 
@@ -219,6 +220,13 @@ app.include_router(
     tokens_recuperacion.router,
     prefix="/api/v1",
     tags=["Tokens de Recuperación"]
+)
+
+# Invitaciones
+app.include_router(
+    invitaciones.router,
+    prefix="/api/v1",
+    tags=["Invitaciones"]
 )
 
 # Formaciones y notificaciones

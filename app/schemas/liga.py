@@ -10,6 +10,9 @@ class LigaBase(BaseModel):
     temporada: str = Field(..., max_length=20)
     categoria: str | None = Field(None, max_length=50)
     activa: bool = True
+    cantidad_partidos: int | None = Field(None, ge=1)
+    duracion_partido: int | None = Field(None, ge=1)
+    logo_url: str | None = None
 
 class LigaCreate(LigaBase):
     pass
@@ -19,6 +22,9 @@ class LigaUpdate(BaseModel):
     temporada: str | None = Field(None, max_length=20)
     categoria: str | None = Field(None, max_length=50)
     activa: bool | None = None
+    cantidad_partidos: int | None = Field(None, ge=1)
+    duracion_partido: int | None = Field(None, ge=1)
+    logo_url: str | None = None
 
 class LigaResponse(BaseModel):
     id_liga: int
@@ -26,6 +32,9 @@ class LigaResponse(BaseModel):
     temporada: str
     categoria: str | None
     activa: bool
+    cantidad_partidos: int | None
+    duracion_partido: int | None
+    logo_url: str | None
     created_at: datetime
     updated_at: datetime
 

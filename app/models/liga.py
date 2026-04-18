@@ -37,6 +37,11 @@ class Liga(Base):
     categoria = Column(String(50), nullable=True)  # Senior, Juvenil A, Cadete, etc.
     activa = Column(Boolean, nullable=False, default=True)  # Liga activa/inactiva
 
+    # Configuración adicional de la liga
+    cantidad_partidos = Column(Integer, nullable=True)  # Número máximo de partidos por equipo
+    duracion_partido = Column(Integer, nullable=True)  # Duración en minutos
+    logo_url = Column(Text, nullable=True)  # URL o base64 del logo de la liga
+
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
