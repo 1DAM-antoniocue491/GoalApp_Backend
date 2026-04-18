@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Liga.
 Maneja operaciones CRUD de ligas/competiciones, incluyendo gestión de
 nombres y temporadas, y asignación automática del rol admin al creador.
 """
-from sqlalchemy.orm import Session, noload
+from sqlalchemy.orm import Session, noload, joinedload
 from typing import List
 from collections import defaultdict
 
@@ -18,11 +18,11 @@ from app.schemas.clasificacion import ClasificacionItem
 
 
 def _refresh_liga(db: Session, liga_id: int) -> Liga:
-    """Recarga una liga desde la BD sin cargar relaciones lazy."""
+    """Recarga una liga desde la BD cargando configuracion para serialización."""
     return db.query(Liga).options(
         noload(Liga.equipos),
-        noload(Liga.configuracion),
         noload(Liga.usuario_roles),
+        joinedload(Liga.configuracion),
     ).filter(Liga.id_liga == liga_id).one()
 
 
@@ -35,7 +35,7 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
-        datos (LigaCreate): Datos de la liga (nombre y temporada)
+        datos (LigaCreate): Datos de la liga (nombre, temporada, categoria, cantidad_partidos, duracion_partido, logo_url)
         id_usuario_creador (int, optional): ID del usuario que crea la liga
 
     Returns:
@@ -43,7 +43,12 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
     """
     liga = Liga(
         nombre=datos.nombre,
-        temporada=datos.temporada
+        temporada=datos.temporada,
+        categoria=datos.categoria,
+        activa=datos.activa,
+        cantidad_partidos=datos.cantidad_partidos,
+        duracion_partido=datos.duracion_partido,
+        logo_url=datos.logo_url
     )
     db.add(liga)
     db.flush()  # Obtener el ID de la liga sin hacer commit
@@ -119,7 +124,7 @@ def actualizar_liga(db: Session, liga_id: int, datos: LigaUpdate):
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         liga_id (int): ID de la liga a actualizar
-        datos (LigaUpdate): Datos a actualizar (nombre, temporada y/o activa)
+        datos (LigaUpdate): Datos a actualizar (nombre, temporada, categoria, activa, cantidad_partidos, duracion_partido, logo_url)
 
     Returns:
         Liga: Objeto Liga actualizado
@@ -131,7 +136,7 @@ def actualizar_liga(db: Session, liga_id: int, datos: LigaUpdate):
     if not liga:
         raise ValueError("Liga no encontrada")
 
-    # Actualizar nombre si se proporciona
+    # Actualizar campos si se proporcionan
     if datos.nombre is not None:
         liga.nombre = datos.nombre
     if datos.temporada is not None:
@@ -140,6 +145,12 @@ def actualizar_liga(db: Session, liga_id: int, datos: LigaUpdate):
         liga.categoria = datos.categoria
     if datos.activa is not None:
         liga.activa = datos.activa
+    if datos.cantidad_partidos is not None:
+        liga.cantidad_partidos = datos.cantidad_partidos
+    if datos.duracion_partido is not None:
+        liga.duracion_partido = datos.duracion_partido
+    if datos.logo_url is not None:
+        liga.logo_url = datos.logo_url
 
     db.commit()
     return _refresh_liga(db, liga.id_liga)
