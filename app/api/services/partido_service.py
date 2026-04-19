@@ -34,17 +34,21 @@ def crear_partido(db: Session, datos: PartidoCreate):
     return partido
 
 
-def obtener_partidos(db: Session):
+def obtener_partidos(db: Session, liga_id: int = None):
     """
-    Obtiene todos los partidos registrados.
-    
+    Obtiene todos los partidos registrados, opcionalmente filtrados por liga.
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
-    
+        liga_id (int, optional): ID de la liga para filtrar
+
     Returns:
-        list[Partido]: Lista con todos los partidos
+        list[Partido]: Lista con todos los partidos (filtrados por liga si se proporciona)
     """
-    return db.query(Partido).all()
+    query = db.query(Partido)
+    if liga_id is not None:
+        query = query.filter(Partido.id_liga == liga_id)
+    return query.all()
 
 
 def obtener_partido_por_id(db: Session, partido_id: int):

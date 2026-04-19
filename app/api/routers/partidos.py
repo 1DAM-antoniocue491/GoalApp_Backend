@@ -3,7 +3,7 @@
 Router de Partidos - Gestión de partidos de fútbol.
 Endpoints para crear, listar, actualizar y eliminar partidos del sistema.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role
@@ -43,22 +43,24 @@ def crear_partido_router(partido: PartidoCreate, db: Session = Depends(get_db)):
     return crear_partido(db, partido)
 
 @router.get("/", response_model=list[PartidoResponse])
-def listar_partidos(db: Session = Depends(get_db)):
+def listar_partidos(liga_id: int | None = Query(None, description="Filtrar por ID de liga"), db: Session = Depends(get_db)):
     """
-    Listar todos los partidos.
-    
+    Listar todos los partidos, opcionalmente filtrados por liga.
+
     Obtiene la lista completa de partidos registrados en el sistema.
-    
+    Si se proporciona liga_id, solo devuelve los partidos de esa liga.
+
     Parámetros:
+        - liga_id (int, optional): ID de la liga para filtrar (query parameter)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
-        List[PartidoResponse]: Lista de todos los partidos
-    
+        List[PartidoResponse]: Lista de partidos (filtrados por liga si se proporciona)
+
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_partidos(db)
+    return obtener_partidos(db, liga_id)
 
 @router.get("/{partido_id}", response_model=PartidoResponse)
 def obtener_partido_router(partido_id: int, db: Session = Depends(get_db)):

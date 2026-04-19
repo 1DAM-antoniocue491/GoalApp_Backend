@@ -42,22 +42,24 @@ def crear_equipo_router(equipo: EquipoCreate, db: Session = Depends(get_db)):
     return crear_equipo(db, equipo)
 
 @router.get("/", response_model=list[EquipoResponse])
-def listar_equipos(db: Session = Depends(get_db)):
+def listar_equipos(liga_id: int = None, db: Session = Depends(get_db)):
     """
-    Listar todos los equipos.
-    
+    Listar todos los equipos, opcionalmente filtrados por liga.
+
     Obtiene la lista completa de equipos registrados en el sistema.
-    
+    Si se proporciona liga_id, solo devuelve los equipos de esa liga.
+
     Parámetros:
+        - liga_id (int, optional): ID de la liga para filtrar (query parameter)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
-        List[EquipoResponse]: Lista de todos los equipos
-    
+        List[EquipoResponse]: Lista de equipos (filtrados por liga si se proporciona)
+
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_equipos(db)
+    return obtener_equipos(db, liga_id)
 
 @router.get("/{equipo_id}", response_model=EquipoResponse)
 def obtener_equipo_router(equipo_id: int, db: Session = Depends(get_db)):

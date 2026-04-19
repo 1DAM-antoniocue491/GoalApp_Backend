@@ -32,17 +32,25 @@ def crear_jugador(db: Session, datos: JugadorCreate):
     return jugador
 
 
-def obtener_jugadores(db: Session):
+def obtener_jugadores(db: Session, equipo_id: int = None, liga_id: int = None):
     """
-    Obtiene todos los jugadores registrados.
-    
+    Obtiene todos los jugadores registrados, opcionalmente filtrados por equipo o liga.
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
-    
+        equipo_id (int, optional): ID del equipo para filtrar
+        liga_id (int, optional): ID de la liga para filtrar (filtra jugadores de equipos de esa liga)
+
     Returns:
-        list[Jugador]: Lista con todos los jugadores
+        list[Jugador]: Lista con todos los jugadores (filtrados si se proporciona equipo_id o liga_id)
     """
-    return db.query(Jugador).all()
+    from app.models.equipo import Equipo
+    query = db.query(Jugador)
+    if equipo_id is not None:
+        query = query.filter(Jugador.id_equipo == equipo_id)
+    if liga_id is not None:
+        query = query.join(Equipo).filter(Equipo.id_liga == liga_id)
+    return query.all()
 
 
 def obtener_jugador_por_id(db: Session, jugador_id: int):

@@ -43,22 +43,26 @@ def crear_jugador_router(jugador: JugadorCreate, db: Session = Depends(get_db)):
     return crear_jugador(db, jugador)
 
 @router.get("/", response_model=list[JugadorResponse])
-def listar_jugadores(db: Session = Depends(get_db)):
+def listar_jugadores(equipo_id: int = None, liga_id: int = None, db: Session = Depends(get_db)):
     """
-    Listar todos los jugadores.
-    
+    Listar todos los jugadores, opcionalmente filtrados por equipo o liga.
+
     Obtiene la lista completa de jugadores registrados en el sistema.
-    
+    Si se proporciona equipo_id, solo devuelve los jugadores de ese equipo.
+    Si se proporciona liga_id, solo devuelve los jugadores de equipos de esa liga.
+
     Parámetros:
+        - equipo_id (int, optional): ID del equipo para filtrar (query parameter)
+        - liga_id (int, optional): ID de la liga para filtrar (query parameter)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
-        List[JugadorResponse]: Lista de todos los jugadores
-    
+        List[JugadorResponse]: Lista de jugadores (filtrados si se proporciona equipo_id o liga_id)
+
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_jugadores(db)
+    return obtener_jugadores(db, equipo_id, liga_id)
 
 @router.get("/{jugador_id}", response_model=JugadorResponse)
 def obtener_jugador_router(jugador_id: int, db: Session = Depends(get_db)):

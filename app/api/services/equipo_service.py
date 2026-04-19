@@ -33,17 +33,21 @@ def crear_equipo(db: Session, datos: EquipoCreate):
     return equipo
 
 
-def obtener_equipos(db: Session):
+def obtener_equipos(db: Session, liga_id: int = None):
     """
-    Obtiene todos los equipos registrados.
-    
+    Obtiene todos los equipos registrados, opcionalmente filtrados por liga.
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
-    
+        liga_id (int, optional): ID de la liga para filtrar
+
     Returns:
-        list[Equipo]: Lista con todos los equipos
+        list[Equipo]: Lista con todos los equipos (filtrados por liga si se proporciona)
     """
-    return db.query(Equipo).all()
+    query = db.query(Equipo)
+    if liga_id is not None:
+        query = query.filter(Equipo.id_liga == liga_id)
+    return query.all()
 
 
 def obtener_equipo_por_id(db: Session, equipo_id: int):
