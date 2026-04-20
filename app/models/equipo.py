@@ -23,14 +23,14 @@ class Equipo(Base):
         escudo (str): URL o path del escudo del equipo (opcional, máx. 255 caracteres)
         colores (str): Colores del equipo (opcional, máx. 50 caracteres)
         id_liga (int): ID de la liga a la que pertenece (Foreign Key)
-        id_entrenador (int): ID del usuario que es entrenador (Foreign Key)
-        id_delegado (int): ID del usuario que es delegado (Foreign Key)
+        id_entrenador (int | None): ID del usuario que es entrenador (Foreign Key, opcional)
+        id_delegado (int | None): ID del usuario que es delegado (Foreign Key, opcional)
         estadio (str): Nombre del estadio del equipo (opcional, máx. 255 caracteres)
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización
         liga (Liga): Relación con la liga
-        entrenador (Usuario): Relación con el usuario entrenador
-        delegado (Usuario): Relación con el usuario delegado
+        entrenador (Usuario | None): Relación con el usuario entrenador
+        delegado (Usuario | None): Relación con el usuario delegado
     """
     __tablename__ = "equipos"
 
@@ -45,8 +45,8 @@ class Equipo(Base):
 
     # Relaciones: liga, entrenador y delegado
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)
-    id_entrenador = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)
-    id_delegado = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)
+    id_entrenador = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=True)
+    id_delegado = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=True)
     estadio = Column(String(255), nullable=True)  # Nombre del estadio (opcional)
 
     # Auditoría: fechas de creación y actualización

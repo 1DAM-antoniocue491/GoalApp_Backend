@@ -27,20 +27,28 @@ router = APIRouter(
 def crear_equipo_router(equipo: EquipoCreate, db: Session = Depends(get_db)):
     """
     Crear un nuevo equipo.
-    
+
     Registra un nuevo equipo en el sistema con su información básica.
-    
+
     Parámetros:
         - equipo (EquipoCreate): Datos del equipo a crear (nombre, escudo, ciudad, etc.)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
         EquipoResponse: Información del equipo creado con su ID asignado
-    
+
     Requiere autenticación: Sí
     Roles permitidos: Admin
+
+    Nota:
+        Si no se especifica id_entrenador o id_delegado, se usa el ID del usuario
+        que crea el equipo (requiere autenticación).
     """
-    return crear_equipo(db, equipo)
+    # Obtener usuario actual para usar como entrenador/delegado por defecto
+    from app.api.dependencies import get_current_user
+    from app.models.usuario import Usuario
+    current_user: Usuario = get_current_user(db=db)
+    return crear_equipo(db, equipo, current_user.id_usuario)
 
 @router.get("/", response_model=list[EquipoResponse])
 def listar_equipos(liga_id: int = None, db: Session = Depends(get_db)):

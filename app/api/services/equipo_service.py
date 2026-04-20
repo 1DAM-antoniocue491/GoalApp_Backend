@@ -9,24 +9,30 @@ from app.models.partido import Partido
 from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoRendimientoResponse
 
 
-def crear_equipo(db: Session, datos: EquipoCreate):
+def crear_equipo(db: Session, datos: EquipoCreate, usuario_id: int = None):
     """
     Crea un nuevo equipo en la base de datos.
-    
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         datos (EquipoCreate): Datos del equipo a crear (nombre, escudo, colores, IDs)
-    
+        usuario_id (int, optional): ID del usuario que crea el equipo. Se usa como
+                                    entrenador y delegado por defecto si no se especifican.
+
     Returns:
         Equipo: Objeto Equipo creado con su ID asignado
     """
+    # Si no se especifica entrenador/delegado, usar el usuario que crea el equipo
+    id_entrenador = datos.id_entrenador or usuario_id
+    id_delegado = datos.id_delegado or usuario_id
+
     equipo = Equipo(
         nombre=datos.nombre,
         escudo=datos.escudo,
         colores=datos.colores,
         id_liga=datos.id_liga,
-        id_entrenador=datos.id_entrenador,
-        id_delegado=datos.id_delegado
+        id_entrenador=id_entrenador,
+        id_delegado=id_delegado
     )
     db.add(equipo)
     db.commit()
