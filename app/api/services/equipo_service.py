@@ -5,7 +5,8 @@ asociaciones con liga, entrenador y delegado.
 """
 from sqlalchemy.orm import Session
 from app.models.equipo import Equipo
-from app.schemas.equipo import EquipoCreate, EquipoUpdate
+from app.models.partido import Partido
+from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoRendimientoResponse
 
 
 def crear_equipo(db: Session, datos: EquipoCreate):
@@ -95,11 +96,11 @@ def actualizar_equipo(db: Session, equipo_id: int, datos: EquipoUpdate):
 def eliminar_equipo(db: Session, equipo_id: int):
     """
     Elimina un equipo de la base de datos.
-    
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         equipo_id (int): ID del equipo a eliminar
-    
+
     Raises:
         ValueError: Si el equipo no existe
     """
@@ -109,3 +110,74 @@ def eliminar_equipo(db: Session, equipo_id: int):
 
     db.delete(equipo)
     db.commit()
+
+
+def obtener_equipos_con_rendimiento(db: Session, liga_id: int):
+    """
+    Obtiene todos los equipos de una liga con sus estadísticas de rendimiento.
+
+    Calcula victorias, empates y derrotas de cada equipo basándose en los partidos
+    finalizados de la liga especificada.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga para filtrar los equipos
+
+    Returns:
+        list[EquipoRendimientoResponse]: Lista de equipos con sus estadísticas de rendimiento.
+                                          Cada equipo incluye:
+                                          - id_equipo, nombre, escudo, colores, id_liga
+                                          - partidos_jugados, victorias, empates, derrotas
+                                          - porcentaje_victorias (0-100)
+    """
+    # Obtener todos los equipos de la liga
+    equipos = db.query(Equipo).filter(Equipo.id_liga == liga_id).all()
+
+    resultados = []
+    for equipo in equipos:
+        # Obtener todos los partidos finalizados donde participó este equipo
+        partidos = db.query(Partido).filter(
+            Partido.id_liga == liga_id,
+            Partido.estado == "Finalizado",
+            (Partido.id_equipo_local == equipo.id_equipo) | (Partido.id_equipo_visitante == equipo.id_equipo)
+        ).all()
+
+        victorias = 0
+        empates = 0
+        derrotas = 0
+
+        for partido in partidos:
+            # Determinar si el equipo es local o visitante
+            es_local = partido.id_equipo_local == equipo.id_equipo
+            goles_equipo = partido.goles_local if es_local else partido.goles_visitante
+            goles_rival = partido.goles_visitante if es_local else partido.goles_local
+
+            # Solo contar partidos con resultado válido
+            if goles_equipo is not None and goles_rival is not None:
+                if goles_equipo > goles_rival:
+                    victorias += 1
+                elif goles_equipo == goles_rival:
+                    empates += 1
+                else:
+                    derrotas += 1
+
+        partidos_jugados = victorias + empates + derrotas
+        porcentaje_victorias = (victorias / partidos_jugados * 100) if partidos_jugados > 0 else 0.0
+
+        resultados.append(EquipoRendimientoResponse(
+            id_equipo=equipo.id_equipo,
+            nombre=equipo.nombre,
+            escudo=equipo.escudo,
+            colores=equipo.colores,
+            id_liga=equipo.id_liga,
+            partidos_jugados=partidos_jugados,
+            victorias=victorias,
+            empates=empates,
+            derrotas=derrotas,
+            porcentaje_victorias=round(porcentaje_victorias, 1)
+        ))
+
+    # Ordenar por porcentaje de victorias descendente
+    resultados.sort(key=lambda x: x.porcentaje_victorias, reverse=True)
+
+    return resultados

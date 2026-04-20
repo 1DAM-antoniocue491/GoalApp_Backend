@@ -7,13 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role
-from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoResponse
+from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoResponse, EquipoRendimientoResponse
 from app.api.services.equipo_service import (
     crear_equipo,
     obtener_equipos,
     obtener_equipo_por_id,
     actualizar_equipo,
-    eliminar_equipo
+    eliminar_equipo,
+    obtener_equipos_con_rendimiento
 )
 
 # Configuración del router
@@ -65,19 +66,19 @@ def listar_equipos(liga_id: int = None, db: Session = Depends(get_db)):
 def obtener_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
     """
     Obtener un equipo por su ID.
-    
+
     Devuelve la información detallada de un equipo específico.
-    
+
     Parámetros:
         - equipo_id (int): ID único del equipo (path parameter)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
         EquipoResponse: Información completa del equipo
-    
+
     Requiere autenticación: No
     Roles permitidos: Público
-    
+
     Raises:
         HTTPException 404: Si el equipo no existe
     """
@@ -86,6 +87,28 @@ def obtener_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
     if not equipo:
         raise HTTPException(404, "Equipo no encontrado")
     return equipo
+
+
+@router.get("/ligas/{liga_id}/rendimiento", response_model=list[EquipoRendimientoResponse])
+def listar_equipos_rendimiento(liga_id: int, db: Session = Depends(get_db)):
+    """
+    Listar todos los equipos de una liga con sus estadísticas de rendimiento.
+
+    Obtiene la lista de equipos de una liga específica junto con sus estadísticas
+    de victorias, empates y derrotas calculadas a partir de los partidos finalizados.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        List[EquipoRendimientoResponse]: Lista de equipos con sus estadísticas,
+                                          ordenada por porcentaje de victorias descendente
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_equipos_con_rendimiento(db, liga_id)
 
 @router.put("/{equipo_id}", response_model=EquipoResponse, dependencies=[Depends(require_role("admin"))])
 def actualizar_equipo_router(equipo_id: int, datos: EquipoUpdate, db: Session = Depends(get_db)):

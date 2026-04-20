@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role, get_current_user
 from app.models.usuario import Usuario
-from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioResponse, LigaConRolResponse
+from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioResponse, LigaConRolResponse, UsuarioConRolEnLigaResponse
 from app.schemas.seguimiento import SeguimientoResponse, LigaSeguidaResponse
 from app.api.services.usuario_service import (
     crear_usuario,
@@ -19,7 +19,8 @@ from app.api.services.usuario_service import (
     seguir_liga,
     dejar_de_seguir_liga,
     obtener_ligas_seguidas,
-    obtener_ligas_con_rol
+    obtener_ligas_con_rol,
+    obtener_usuarios_con_rol_en_liga
 )
 
 # Configuración del router
@@ -267,3 +268,27 @@ def obtener_ligas_usuario_router(
     Roles permitidos: Todos los usuarios autenticados
     """
     return obtener_ligas_con_rol(db, current_user.id_usuario)
+
+
+@router.get("/ligas/{liga_id}/usuarios", response_model=list[UsuarioConRolEnLigaResponse])
+def obtener_usuarios_con_rol(
+    liga_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener todos los usuarios con roles asignados en una liga específica.
+
+    Devuelve la lista de usuarios que tienen algún rol (admin, entrenador, delegado, jugador, etc.)
+    en la liga especificada. Útil para mostrar estadísticas de usuarios por liga.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        List[UsuarioConRolEnLigaResponse]: Lista de usuarios con su rol en la liga
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_usuarios_con_rol_en_liga(db, liga_id)

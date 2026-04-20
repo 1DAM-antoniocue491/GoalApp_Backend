@@ -57,7 +57,7 @@ class EquipoResponse(BaseModel):
     """
     Schema de respuesta para un equipo.
     Usado en las respuestas de los endpoints GET /equipos/
-    
+
     Attributes:
         id_equipo (int): Identificador único del equipo
         nombre (str): Nombre del equipo
@@ -81,3 +81,35 @@ class EquipoResponse(BaseModel):
 
     class Config:
         from_attributes = True  # Permite crear el schema desde objetos ORM de SQLAlchemy
+
+
+class EquipoRendimientoResponse(BaseModel):
+    """
+    Schema de respuesta para el rendimiento de un equipo.
+    Incluye estadísticas de victorias, empates y derrotas calculadas desde los partidos.
+
+    Attributes:
+        id_equipo (int): Identificador único del equipo
+        nombre (str): Nombre del equipo
+        escudo (str | None): URL o path del escudo del equipo
+        colores (str | None): Colores representativos del equipo
+        id_liga (int): ID de la liga a la que pertenece el equipo
+        partidos_jugados (int): Total de partidos jugados
+        victorias (int): Número de victorias
+        empates (int): Número de empates
+        derrotas (int): Número de derrotas
+        porcentaje_victorias (float): Porcentaje de victorias (0-100)
+    """
+    id_equipo: int
+    nombre: str
+    escudo: str | None
+    colores: str | None
+    id_liga: int
+    partidos_jugados: int
+    victorias: int
+    empates: int
+    derrotas: int
+    porcentaje_victorias: float
+
+    class Config:
+        from_attributes = True
