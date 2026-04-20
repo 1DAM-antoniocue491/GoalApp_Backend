@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from itertools import combinations
 from app.models.partido import Partido
 from app.models.equipo import Equipo
+from app.models.jornada import Jornada
 from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest
 
 
@@ -340,9 +341,6 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
     num_jornadas = num_equipos - 1
     partidos_por_jornada = num_equipos // 2
 
-    partidos_creados = 0
-    jornada_num = 1
-
     # Encontrar la primera fecha válida (día seleccionado)
     fecha_actual = fecha_inicio
     while True:
@@ -353,7 +351,42 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             break
         fecha_actual += timedelta(days=1)
 
-    for jornada in range(num_jornadas):
+    # Crear jornadas primero (ida)
+    jornadas_ida = []
+    fecha_jornada = fecha_actual
+    for i in range(num_jornadas):
+        jornada = Jornada(
+            id_liga=liga_id,
+            numero=i + 1,
+            nombre=f"Jornada {i + 1}",
+            fecha_inicio=fecha_jornada.replace(hour=hora, minute=minuto),
+            fecha_fin=fecha_jornada.replace(hour=hora+2, minute=minuto)  # 2 horas de ventana
+        )
+        db.add(jornada)
+        db.flush()  # Obtener el ID generado
+        jornadas_ida.append(jornada.id_jornada)
+        fecha_jornada += timedelta(weeks=1)
+
+    # Crear partidos de ida
+    partidos_creados = 0
+    fecha_actual = fecha_inicio
+
+    # Reiniciar equipos para el cálculo
+    equipos_lista = list(equipos)
+    if len(equipos_lista) % 2 != 0:
+        equipos_lista.append(None)
+
+    for jornada_idx in range(num_jornadas):
+        # Encontrar fecha válida para esta jornada
+        while True:
+            dia_semana = fecha_actual.weekday()
+            dia_backend = dia_semana + 1 if dia_semana < 6 else 0
+            if dia_backend in config.dias_partido:
+                break
+            fecha_actual += timedelta(days=1)
+
+        id_jornada = jornadas_ida[jornada_idx]
+
         # Generar emparejamientos de esta jornada
         for i in range(partidos_por_jornada):
             local_idx = i
@@ -370,7 +403,7 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             fecha_partido = fecha_actual.replace(hour=hora, minute=minuto)
             partido = Partido(
                 id_liga=liga_id,
-                id_jornada=jornada_num,
+                id_jornada=id_jornada,
                 id_equipo_local=local.id_equipo,
                 id_equipo_visitante=visitante.id_equipo,
                 fecha=fecha_partido,
@@ -382,25 +415,48 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             partidos_creados += 1
 
         # Rotar equipos para la siguiente jornada (algoritmo round-robin)
-        # Mantener el primero fijo, rotar el resto
         equipos_lista = [equipos_lista[0]] + [equipos_lista[-1]] + equipos_lista[1:-1]
-
-        # Avanzar a la siguiente semana (mismo día)
         fecha_actual += timedelta(weeks=1)
-        jornada_num += 1
 
     # Si es ida y vuelta, crear la vuelta
     if config.tipo == "ida_vuelta":
-        # Reiniciar para la vuelta
+        # Reiniciar equipos para la vuelta
         equipos_lista = list(equipos)
         if len(equipos_lista) % 2 != 0:
             equipos_lista.append(None)
 
         # La vuelta comienza una semana después de la última jornada de ida
         fecha_actual += timedelta(weeks=1)
-        vuelta_jornada_num = jornada_num
 
-        for jornada in range(num_jornadas):
+        # Crear jornadas de vuelta
+        jornadas_vuelta = []
+        fecha_jornada = fecha_actual
+        for i in range(num_jornadas):
+            jornada = Jornada(
+                id_liga=liga_id,
+                numero=num_jornadas + i + 1,
+                nombre=f"Jornada {num_jornadas + i + 1} (Vuelta)",
+                fecha_inicio=fecha_jornada.replace(hour=hora, minute=minuto),
+                fecha_fin=fecha_jornada.replace(hour=hora+2, minute=minuto)
+            )
+            db.add(jornada)
+            db.flush()
+            jornadas_vuelta.append(jornada.id_jornada)
+            fecha_jornada += timedelta(weeks=1)
+
+        # Crear partidos de vuelta
+        fecha_actual = fecha_inicio + timedelta(weeks=num_jornadas)
+        for jornada_idx in range(num_jornadas):
+            # Encontrar fecha válida
+            while True:
+                dia_semana = fecha_actual.weekday()
+                dia_backend = dia_semana + 1 if dia_semana < 6 else 0
+                if dia_backend in config.dias_partido:
+                    break
+                fecha_actual += timedelta(days=1)
+
+            id_jornada = jornadas_vuelta[jornada_idx]
+
             for i in range(partidos_por_jornada):
                 local_idx = i
                 visitante_idx = num_equipos - 1 - i
@@ -408,7 +464,6 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                 local = equipos_lista[local_idx]
                 visitante = equipos_lista[visitante_idx]
 
-                # Saltar si alguno es None
                 if local is None or visitante is None:
                     continue
 
@@ -416,7 +471,7 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                 fecha_partido = fecha_actual.replace(hour=hora, minute=minuto)
                 partido = Partido(
                     id_liga=liga_id,
-                    id_jornada=vuelta_jornada_num,
+                    id_jornada=id_jornada,
                     id_equipo_local=visitante.id_equipo,  # Invertido
                     id_equipo_visitante=local.id_equipo,   # Invertido
                     fecha=fecha_partido,
@@ -430,11 +485,10 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             # Rotar equipos
             equipos_lista = [equipos_lista[0]] + [equipos_lista[-1]] + equipos_lista[1:-1]
             fecha_actual += timedelta(weeks=1)
-            vuelta_jornada_num += 1
 
     db.commit()
 
-    total_jornadas = jornada_num - 1 if config.tipo == "ida" else (jornada_num - 1) * 2
+    total_jornadas = len(jornadas_ida) if config.tipo == "ida" else len(jornadas_ida) + len(jornadas_vuelta)
 
     return {
         "mensaje": f"Calendario creado con {partidos_creados} partidos distribuidos en {total_jornadas} jornadas",

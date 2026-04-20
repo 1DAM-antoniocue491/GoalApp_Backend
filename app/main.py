@@ -10,6 +10,26 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .database.connection import engine, Base
 
+# Importar modelos para que se creen las tablas
+from .models import (
+    usuario,
+    rol,
+    liga,
+    liga_configuracion,
+    equipo,
+    jugador,
+    partido,
+    evento_partido,
+    formacion,
+    notificacion,
+    convocatoria,
+    jornada,
+    posiciones_formacion,
+    alineacion,
+    token_recuperacion,
+    invitacion,
+)
+
 # Importar todos los routers
 from .api.routers import (
     auth,

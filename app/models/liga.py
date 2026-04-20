@@ -52,3 +52,4 @@ class Liga(Base):
     equipos = relationship("Equipo", back_populates="liga", lazy="raise")
     configuracion = relationship("LigaConfiguracion", back_populates="liga", uselist=False, lazy="raise")
     usuario_roles = relationship("UsuarioRol", back_populates="liga", lazy="raise")
+    jornadas = relationship("Jornada", back_populates="liga", lazy="raise", cascade="all, delete-orphan")

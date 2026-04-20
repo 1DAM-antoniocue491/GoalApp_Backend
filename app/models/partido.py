@@ -7,6 +7,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
+from .jornada import Jornada
 
 
 class Partido(Base):
@@ -36,8 +37,9 @@ class Partido(Base):
     # Clave primaria
     id_partido = Column(Integer, primary_key=True)
 
-    # Relaciones: liga y equipos participantes
+    # Relaciones: liga, jornada y equipos participantes
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)
+    id_jornada = Column(Integer, ForeignKey("jornadas.id_jornada"), nullable=True)
     id_equipo_local = Column(Integer, ForeignKey("equipos.id_equipo"), nullable=False)
     id_equipo_visitante = Column(Integer, ForeignKey("equipos.id_equipo"), nullable=False)
 
@@ -57,5 +59,6 @@ class Partido(Base):
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
     liga = relationship("Liga", lazy="raise")
+    jornada = relationship("Jornada", back_populates="partidos", lazy="raise")
     equipo_local = relationship("Equipo", foreign_keys=[id_equipo_local], lazy="raise")
     equipo_visitante = relationship("Equipo", foreign_keys=[id_equipo_visitante], lazy="raise")
