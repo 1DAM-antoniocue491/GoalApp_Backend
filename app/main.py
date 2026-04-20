@@ -25,7 +25,6 @@ from .models import (
     convocatoria_partido,
     jornada,
     posicion_formacion,
-    posiciones_formacion,
     alineacion_partido,
     token_recuperacion,
     invitacion,
