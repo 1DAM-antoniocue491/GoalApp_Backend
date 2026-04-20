@@ -45,25 +45,27 @@ def login(
     db: Session = Depends(get_db)
 ):
     """
-    Autenticar usuario y generar token de acceso.
-    
-    Valida las credenciales del usuario (email y contraseña) y genera un token JWT
+    Autenticar usuario y generar tokens de acceso y refresh.
+
+    Valida las credenciales del usuario (email y contraseña) y genera tokens JWT
     para acceder a los endpoints protegidos de la API.
-    
+
     Parámetros:
         - form_data (OAuth2PasswordRequestForm): Formulario con username (email) y password
         - db (Session): Sesión de base de datos
-    
+
     Returns:
-        dict: Token de acceso JWT y tipo de token
+        dict: Tokens de acceso y refresh JWT
         {
             "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "token_type": "bearer"
+            "token_type": "bearer",
+            "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+            "expires_in": 2592000
         }
-    
+
     Requiere autenticación: No
     Roles permitidos: Público
-    
+
     Raises:
         HTTPException 401: Si las credenciales son incorrectas
     """
@@ -77,18 +79,27 @@ def login(
             detail="Credenciales incorrectas"
         )
 
-    # Configurar tiempo de expiración del token
+    # Configurar tiempo de expiración del access token (30 días)
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    # Crear token JWT con el ID del usuario
+    # Crear access token JWT con el ID del usuario
     access_token = create_access_token(
         data={"sub": str(usuario.id_usuario)},
         expires_delta=access_token_expires
     )
 
+    # Crear refresh token con expiración de 90 días (más largo)
+    refresh_token_expires = timedelta(days=90)
+    refresh_token = create_access_token(
+        data={"sub": str(usuario.id_usuario), "type": "refresh"},
+        expires_delta=refresh_token_expires
+    )
+
     return {
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "refresh_token": refresh_token,
+        "expires_in": int(access_token_expires.total_seconds())
     }
 
 # ============================================================

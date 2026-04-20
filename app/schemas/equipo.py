@@ -64,8 +64,8 @@ class EquipoResponse(BaseModel):
         escudo (str | None): URL o path del escudo del equipo
         colores (str | None): Colores representativos del equipo
         id_liga (int): ID de la liga a la que pertenece el equipo
-        id_entrenador (int): ID del usuario que actúa como entrenador
-        id_delegado (int): ID del usuario que actúa como delegado
+        id_entrenador (int | None): ID del usuario que actúa como entrenador
+        id_delegado (int | None): ID del usuario que actúa como delegado
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización del registro
     """
@@ -74,8 +74,8 @@ class EquipoResponse(BaseModel):
     escudo: str | None
     colores: str | None
     id_liga: int
-    id_entrenador: int
-    id_delegado: int
+    id_entrenador: int | None = None
+    id_delegado: int | None = None
     created_at: datetime
     updated_at: datetime
 
