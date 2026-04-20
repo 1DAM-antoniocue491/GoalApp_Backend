@@ -15,7 +15,13 @@ from app.api.services.equipo_service import (
     obtener_equipo_por_id,
     actualizar_equipo,
     eliminar_equipo,
-    obtener_equipos_con_rendimiento
+    obtener_equipos_con_rendimiento,
+    obtener_detalle_equipo,
+    obtener_proximos_partidos,
+    obtener_ultimos_partidos,
+    obtener_goleadores_equipo,
+    obtener_plantilla_equipo,
+    obtener_staff_equipo
 )
 
 # Configuración del router
@@ -145,19 +151,141 @@ def actualizar_equipo_router(equipo_id: int, datos: EquipoUpdate, db: Session = 
 def eliminar_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
     """
     Eliminar un equipo.
-    
+
     Elimina un equipo del sistema. Esta acción puede afectar registros relacionados
     como jugadores, partidos y formaciones.
-    
+
     Parámetros:
         - equipo_id (int): ID del equipo a eliminar (path parameter)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
         dict: Mensaje de confirmación
-    
+
     Requiere autenticación: Sí
     Roles permitidos: Admin
     """
     eliminar_equipo(db, equipo_id)
     return {"mensaje": "Equipo eliminado correctamente"}
+
+
+@router.get("/{equipo_id}/detalle")
+def obtener_detalle_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener detalle completo de un equipo con estadísticas.
+
+    Devuelve información extendida del equipo incluyendo posición en liga,
+    puntos, tasa de victoria, goles a favor y en contra.
+
+    Parámetros:
+        - equipo_id (int): ID único del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        dict: Información completa del equipo con estadísticas
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    equipo = obtener_equipo_por_id(db, equipo_id)
+    if not equipo:
+        raise HTTPException(404, "Equipo no encontrado")
+
+    detalle = obtener_detalle_equipo(db, equipo_id, equipo.id_liga)
+    if not detalle:
+        raise HTTPException(404, "Equipo no encontrado")
+
+    return detalle
+
+
+@router.get("/{equipo_id}/partidos/proximos")
+def obtener_proximos_partidos_router(equipo_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener próximos partidos de un equipo.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        list: Lista de próximos partidos
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_proximos_partidos(db, equipo_id)
+
+
+@router.get("/{equipo_id}/partidos/ultimos")
+def obtener_ultimos_partidos_router(equipo_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener últimos partidos finalizados de un equipo.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        list: Lista de últimos partidos con resultado (W/D/L)
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_ultimos_partidos(db, equipo_id)
+
+
+@router.get("/{equipo_id}/goleadores")
+def obtener_goleadores_router(equipo_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener máximos goleadores de un equipo.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        list: Lista de jugadores ordenados por goles
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_goleadores_equipo(db, equipo_id)
+
+
+@router.get("/{equipo_id}/plantilla")
+def obtener_plantilla_router(equipo_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener plantilla completa de un equipo.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        list: Lista de jugadores con sus estadísticas
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_plantilla_equipo(db, equipo_id)
+
+
+@router.get("/{equipo_id}/staff")
+def obtener_staff_router(equipo_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener staff de un equipo (entrenador y capitán).
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        dict: Información del entrenador y capitán
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    staff = obtener_staff_equipo(db, equipo_id)
+    if not staff:
+        raise HTTPException(404, "Equipo no encontrado")
+    return staff
