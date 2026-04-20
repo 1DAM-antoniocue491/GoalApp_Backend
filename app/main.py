@@ -22,10 +22,10 @@ from .models import (
     evento_partido,
     formacion,
     notificacion,
-    convocatoria,
+    convocatoria_partido,
     jornada,
     posiciones_formacion,
-    alineacion,
+    alineacion_partido,
     token_recuperacion,
     invitacion,
 )
