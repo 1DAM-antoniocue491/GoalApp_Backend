@@ -9,21 +9,21 @@ class EquipoBase(BaseModel):
     """
     Schema base de Equipo con campos comunes.
     Usado como clase base para herencia.
-    
+
     Attributes:
         nombre (str): Nombre del equipo (máximo 100 caracteres)
-        escudo (str | None): URL o path del escudo del equipo (máximo 255 caracteres)
+        escudo (str | None): URL o path del escudo del equipo
         colores (str | None): Colores representativos del equipo (máximo 50 caracteres)
         id_liga (int): ID de la liga a la que pertenece el equipo
-        id_entrenador (int): ID del usuario que actúa como entrenador
-        id_delegado (int): ID del usuario que actúa como delegado
+        id_entrenador (int | None): ID del usuario que actúa como entrenador
+        id_delegado (int | None): ID del usuario que actúa como delegado
     """
     nombre: str = Field(..., max_length=100)
     escudo: str | None = Field(None, max_length=255)
     colores: str | None = Field(None, max_length=50)
     id_liga: int
-    id_entrenador: int
-    id_delegado: int
+    id_entrenador: int | None = None
+    id_delegado: int | None = None
 
 class EquipoCreate(EquipoBase):
     """
