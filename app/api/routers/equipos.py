@@ -6,7 +6,8 @@ Endpoints para crear, listar, actualizar y eliminar equipos.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_role
+from app.api.dependencies import get_db, require_role, get_current_user
+from app.models.usuario import Usuario
 from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoResponse, EquipoRendimientoResponse
 from app.api.services.equipo_service import (
     crear_equipo,
@@ -24,7 +25,11 @@ router = APIRouter(
 )
 
 @router.post("/", response_model=EquipoResponse, dependencies=[Depends(require_role("admin"))])
-def crear_equipo_router(equipo: EquipoCreate, db: Session = Depends(get_db)):
+def crear_equipo_router(
+    equipo: EquipoCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
     """
     Crear un nuevo equipo.
 
@@ -33,6 +38,7 @@ def crear_equipo_router(equipo: EquipoCreate, db: Session = Depends(get_db)):
     Parámetros:
         - equipo (EquipoCreate): Datos del equipo a crear (nombre, escudo, ciudad, etc.)
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado (inyectado desde JWT)
 
     Returns:
         EquipoResponse: Información del equipo creado con su ID asignado
@@ -44,10 +50,6 @@ def crear_equipo_router(equipo: EquipoCreate, db: Session = Depends(get_db)):
         Si no se especifica id_entrenador o id_delegado, se usa el ID del usuario
         que crea el equipo (requiere autenticación).
     """
-    # Obtener usuario actual para usar como entrenador/delegado por defecto
-    from app.api.dependencies import get_current_user
-    from app.models.usuario import Usuario
-    current_user: Usuario = get_current_user(db=db)
     return crear_equipo(db, equipo, current_user.id_usuario)
 
 @router.get("/", response_model=list[EquipoResponse])
