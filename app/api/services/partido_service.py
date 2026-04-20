@@ -4,8 +4,12 @@ Maneja operaciones CRUD de partidos, incluyendo gestión de equipos local y visi
 marcadores, fechas y estados del partido.
 """
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from datetime import datetime, timedelta
+from itertools import combinations
 from app.models.partido import Partido
-from app.schemas.partido import PartidoCreate, PartidoUpdate
+from app.models.equipo import Equipo
+from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest
 
 
 def crear_partido(db: Session, datos: PartidoCreate):
@@ -96,11 +100,11 @@ def actualizar_partido(db: Session, partido_id: int, datos: PartidoUpdate):
 def eliminar_partido(db: Session, partido_id: int):
     """
     Elimina un partido de la base de datos.
-    
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         partido_id (int): ID del partido a eliminar
-    
+
     Raises:
         ValueError: Si el partido no existe
     """
@@ -110,3 +114,329 @@ def eliminar_partido(db: Session, partido_id: int):
 
     db.delete(partido)
     db.commit()
+
+
+def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
+    """
+    Obtiene todos los partidos con información de los equipos.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int, optional): ID de la liga para filtrar
+
+    Returns:
+        list: Lista de partidos con nombres y escudos de equipos
+    """
+    EquipoVisitante = Equipo  # Alias para el equipo visitante
+
+    query = db.query(
+        Partido,
+        Equipo.nombre.label("nombre_equipo_local"),
+        Equipo.escudo.label("escudo_equipo_local"),
+        EquipoVisitante.nombre.label("nombre_equipo_visitante"),
+        EquipoVisitante.escudo.label("escudo_equipo_visitante")
+    ).join(Equipo, Partido.id_equipo_local == Equipo.id_equipo)\
+     .join(EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo)
+
+    if liga_id is not None:
+        query = query.filter(Partido.id_liga == liga_id)
+
+    resultados = []
+    for partido, nombre_local, escudo_local, nombre_visitante, escudo_visitante in query.all():
+        resultados.append({
+            "id_partido": partido.id_partido,
+            "id_liga": partido.id_liga,
+            "id_jornada": partido.id_jornada,
+            "id_equipo_local": partido.id_equipo_local,
+            "id_equipo_visitante": partido.id_equipo_visitante,
+            "goles_local": partido.goles_local,
+            "goles_visitante": partido.goles_visitante,
+            "fecha": partido.fecha.isoformat() if partido.fecha else None,
+            "estado": partido.estado,
+            "created_at": partido.created_at.isoformat() if partido.created_at else None,
+            "updated_at": partido.updated_at.isoformat() if partido.updated_at else None,
+            "nombre_equipo_local": nombre_local,
+            "escudo_equipo_local": escudo_local,
+            "nombre_equipo_visitante": nombre_visitante,
+            "escudo_equipo_visitante": escudo_visitante,
+        })
+
+    return resultados
+
+
+def obtener_partidos_por_jornada(db: Session, liga_id: int):
+    """
+    Obtiene los partidos agrupados por jornada.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+
+    Returns:
+        list: Lista de jornadas con sus partidos
+    """
+    partidos = db.query(Partido).filter(Partido.id_liga == liga_id).all()
+
+    # Agrupar por jornada
+    jornadas_dict = {}
+    for partido in partidos:
+        jornada_num = partido.id_jornada or 1
+        if jornada_num not in jornadas_dict:
+            jornadas_dict[jornada_num] = []
+
+        # Obtener equipos
+        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
+        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+
+        jornadas_dict[jornada_num].append({
+            "id_partido": partido.id_partido,
+            "id_liga": partido.id_liga,
+            "id_jornada": partido.id_jornada,
+            "id_equipo_local": partido.id_equipo_local,
+            "id_equipo_visitante": partido.id_equipo_visitante,
+            "goles_local": partido.goles_local,
+            "goles_visitante": partido.goles_visitante,
+            "fecha": partido.fecha.isoformat() if partido.fecha else None,
+            "estado": partido.estado,
+            "created_at": partido.created_at.isoformat() if partido.created_at else None,
+            "updated_at": partido.updated_at.isoformat() if partido.updated_at else None,
+            "nombre_equipo_local": equipo_local.nombre if equipo_local else "Unknown",
+            "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
+            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
+            "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
+        })
+
+    # Convertir a lista ordenada
+    resultados = []
+    for jornada_num in sorted(jornadas_dict.keys()):
+        resultados.append({
+            "numero": jornada_num,
+            "nombre": f"Jornada {jornada_num}",
+            "partidos": jornadas_dict[jornada_num],
+        })
+
+    return resultados
+
+
+def obtener_partidos_proximos(db: Session, limit: int = 10):
+    """
+    Obtiene los próximos partidos programados.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        limit (int): Número máximo de partidos a devolver
+
+    Returns:
+        list: Lista de próximos partidos con información de equipos
+    """
+    partidos = db.query(Partido).filter(
+        Partido.estado == "Programado"
+    ).order_by(Partido.fecha.asc()).limit(limit).all()
+
+    resultados = []
+    for partido in partidos:
+        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
+        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+
+        resultados.append({
+            "id_partido": partido.id_partido,
+            "id_liga": partido.id_liga,
+            "id_jornada": partido.id_jornada,
+            "id_equipo_local": partido.id_equipo_local,
+            "id_equipo_visitante": partido.id_equipo_visitante,
+            "goles_local": partido.goles_local,
+            "goles_visitante": partido.goles_visitante,
+            "fecha": partido.fecha.isoformat() if partido.fecha else None,
+            "estado": partido.estado,
+            "nombre_equipo_local": equipo_local.nombre if equipo_local else "Unknown",
+            "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
+            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
+            "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
+        })
+
+    return resultados
+
+
+def obtener_partidos_en_vivo(db: Session):
+    """
+    Obtiene los partidos que están en vivo.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+
+    Returns:
+        list: Lista de partidos en vivo con información de equipos
+    """
+    partidos = db.query(Partido).filter(Partido.estado == "En Juego").all()
+
+    resultados = []
+    for partido in partidos:
+        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
+        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+
+        resultados.append({
+            "id_partido": partido.id_partido,
+            "id_liga": partido.id_liga,
+            "id_jornada": partido.id_jornada,
+            "id_equipo_local": partido.id_equipo_local,
+            "id_equipo_visitante": partido.id_equipo_visitante,
+            "goles_local": partido.goles_local,
+            "goles_visitante": partido.goles_visitante,
+            "fecha": partido.fecha.isoformat() if partido.fecha else None,
+            "estado": partido.estado,
+            "nombre_equipo_local": equipo_local.nombre if equipo_local else "Unknown",
+            "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
+            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_local else "Unknown",
+            "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
+        })
+
+    return resultados
+
+
+def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
+    """
+    Crea automáticamente todos los partidos de una liga basándose en la configuración.
+    Usa algoritmo round-robin para distribuir equipos en jornadas.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga para la que crear el calendario
+        config (CalendarCreateRequest): Configuración del calendario (tipo, fecha inicio, días, hora)
+
+    Returns:
+        dict: Mensaje de confirmación y número de partidos creados
+
+    Raises:
+        ValueError: Si no hay suficientes equipos o configuración inválida
+    """
+    # Obtener equipos de la liga
+    equipos = db.query(Equipo).filter(Equipo.id_liga == liga_id).all()
+
+    if len(equipos) < 2:
+        raise ValueError("Se necesitan al menos 2 equipos para crear un calendario")
+
+    # Parsear fecha de inicio
+    try:
+        fecha_inicio = datetime.strptime(config.fecha_inicio, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError("Formato de fecha inválido. Use YYYY-MM-DD")
+
+    # Parsear hora
+    try:
+        hora_parts = config.hora.split(":")
+        hora = int(hora_parts[0])
+        minuto = int(hora_parts[1]) if len(hora_parts) > 1 else 0
+    except (ValueError, IndexError):
+        raise ValueError("Formato de hora inválido. Use HH:MM")
+
+    # Algoritmo round-robin
+    equipos_lista = list(equipos)
+
+    # Si hay número impar de equipos, añadir un "bye" (equipo fantasma)
+    if len(equipos_lista) % 2 != 0:
+        equipos_lista.append(None)
+
+    num_equipos = len(equipos_lista)
+    num_jornadas = num_equipos - 1
+    partidos_por_jornada = num_equipos // 2
+
+    partidos_creados = 0
+    jornada_num = 1
+
+    # Encontrar la primera fecha válida (día seleccionado)
+    fecha_actual = fecha_inicio
+    while True:
+        dia_semana = fecha_actual.weekday()  # 0=Lunes, 6=Domingo
+        # Convertir a formato backend (1=Lunes, 0=Domingo)
+        dia_backend = dia_semana + 1 if dia_semana < 6 else 0
+        if dia_backend in config.dias_partido:
+            break
+        fecha_actual += timedelta(days=1)
+
+    for jornada in range(num_jornadas):
+        # Generar emparejamientos de esta jornada
+        for i in range(partidos_por_jornada):
+            local_idx = i
+            visitante_idx = num_equipos - 1 - i
+
+            local = equipos_lista[local_idx]
+            visitante = equipos_lista[visitante_idx]
+
+            # Saltar si alguno es None (equipo fantasma)
+            if local is None or visitante is None:
+                continue
+
+            # Crear partido con la fecha calculada
+            fecha_partido = fecha_actual.replace(hour=hora, minute=minuto)
+            partido = Partido(
+                id_liga=liga_id,
+                id_jornada=jornada_num,
+                id_equipo_local=local.id_equipo,
+                id_equipo_visitante=visitante.id_equipo,
+                fecha=fecha_partido,
+                estado="Programado",
+                goles_local=None,
+                goles_visitante=None
+            )
+            db.add(partido)
+            partidos_creados += 1
+
+        # Rotar equipos para la siguiente jornada (algoritmo round-robin)
+        # Mantener el primero fijo, rotar el resto
+        equipos_lista = [equipos_lista[0]] + [equipos_lista[-1]] + equipos_lista[1:-1]
+
+        # Avanzar a la siguiente semana (mismo día)
+        fecha_actual += timedelta(weeks=1)
+        jornada_num += 1
+
+    # Si es ida y vuelta, crear la vuelta
+    if config.tipo == "ida_vuelta":
+        # Reiniciar para la vuelta
+        equipos_lista = list(equipos)
+        if len(equipos_lista) % 2 != 0:
+            equipos_lista.append(None)
+
+        # La vuelta comienza una semana después de la última jornada de ida
+        fecha_actual += timedelta(weeks=1)
+        vuelta_jornada_num = jornada_num
+
+        for jornada in range(num_jornadas):
+            for i in range(partidos_por_jornada):
+                local_idx = i
+                visitante_idx = num_equipos - 1 - i
+
+                local = equipos_lista[local_idx]
+                visitante = equipos_lista[visitante_idx]
+
+                # Saltar si alguno es None
+                if local is None or visitante is None:
+                    continue
+
+                # Invertir localía para la vuelta
+                fecha_partido = fecha_actual.replace(hour=hora, minute=minuto)
+                partido = Partido(
+                    id_liga=liga_id,
+                    id_jornada=vuelta_jornada_num,
+                    id_equipo_local=visitante.id_equipo,  # Invertido
+                    id_equipo_visitante=local.id_equipo,   # Invertido
+                    fecha=fecha_partido,
+                    estado="Programado",
+                    goles_local=None,
+                    goles_visitante=None
+                )
+                db.add(partido)
+                partidos_creados += 1
+
+            # Rotar equipos
+            equipos_lista = [equipos_lista[0]] + [equipos_lista[-1]] + equipos_lista[1:-1]
+            fecha_actual += timedelta(weeks=1)
+            vuelta_jornada_num += 1
+
+    db.commit()
+
+    total_jornadas = jornada_num - 1 if config.tipo == "ida" else (jornada_num - 1) * 2
+
+    return {
+        "mensaje": f"Calendario creado con {partidos_creados} partidos distribuidos en {total_jornadas} jornadas",
+        "partidos_creados": partidos_creados
+    }

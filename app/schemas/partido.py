@@ -77,7 +77,7 @@ class PartidoResponse(BaseModel):
     """
     Schema de respuesta para un partido.
     Usado en las respuestas de los endpoints GET /partidos/
-    
+
     Attributes:
         id_partido (int): Identificador único del partido
         id_liga (int): ID de la liga a la que pertenece el partido
@@ -103,3 +103,32 @@ class PartidoResponse(BaseModel):
 
     class Config:
         from_attributes = True  # Permite crear el schema desde objetos ORM de SQLAlchemy
+
+
+class CalendarCreateRequest(BaseModel):
+    """
+    Schema para crear calendario automático de una liga.
+    Usado en el endpoint POST /partidos/ligas/{liga_id}/crear-calendario
+
+    Attributes:
+        tipo (str): Tipo de calendario - 'ida' (solo ida) o 'ida_vuelta' (ida y vuelta)
+        fecha_inicio (str): Fecha de inicio en formato YYYY-MM-DD
+        dias_partido (list[int]): Días de la semana para los partidos (1=Lunes, 0=Domingo)
+        hora (str): Hora de los partidos en formato HH:MM
+    """
+    tipo: str  # 'ida' o 'ida_vuelta'
+    fecha_inicio: str  # formato YYYY-MM-DD
+    dias_partido: list[int]  # [1, 3, 5] = Lunes, Miércoles, Viernes
+    hora: str  # formato HH:MM
+
+
+class CalendarCreateResponse(BaseModel):
+    """
+    Schema de respuesta tras crear calendario automático.
+
+    Attributes:
+        mensaje (str): Mensaje de confirmación
+        partidos_creados (int): Número de partidos creados
+    """
+    mensaje: str
+    partidos_creados: int
