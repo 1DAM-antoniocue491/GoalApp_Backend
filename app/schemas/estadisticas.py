@@ -54,3 +54,18 @@ class TeamGoalsStatsResponse(BaseModel):
     diferencia_goles: int = Field(..., description="Diferencia de goles")
     promedio_goles_favor: float = Field(..., description="Promedio de goles a favor por partido")
     partidos_jugados: int = Field(..., description="Partidos jugados")
+
+
+class PlayerPersonalStatsResponse(BaseModel):
+    """Estadísticas personales de un jugador."""
+    id_jugador: int = Field(..., description="ID del jugador")
+    id_usuario: int = Field(..., description="ID del usuario")
+    nombre: str = Field(..., description="Nombre del jugador")
+    nombre_equipo: str = Field(..., description="Nombre del equipo")
+    escudo_equipo: Optional[str] = Field(None, description="URL del escudo del equipo")
+    goles: int = Field(..., description="Goles marcados")
+    asistencias: int = Field(..., description="Asistencias")
+    tarjetas_amarillas: int = Field(..., description="Tarjetas amarillas recibidas")
+    tarjetas_rojas: int = Field(..., description="Tarjetas rojas recibidas")
+    partidos_jugados: int = Field(..., description="Partidos jugados")
+    veces_mvp: int = Field(..., description="Veces que ha sido MVP")

@@ -606,9 +606,9 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
     from app.models.usuario import Usuario
     from app.models.rol import Rol
 
-    # Query con join para obtener usuario + rol en la liga
+    # Query con join para obtener usuario + rol + estado activo en la liga
     resultados = (
-        db.query(Usuario, Rol)
+        db.query(Usuario, Rol, UsuarioRol.activo)
         .join(UsuarioRol, UsuarioRol.id_usuario == Usuario.id_usuario)
         .join(Rol, Rol.id_rol == UsuarioRol.id_rol)
         .filter(UsuarioRol.id_liga == liga_id)
@@ -617,13 +617,14 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
 
     # Construir lista de respuestas con datos de usuario y rol
     usuarios_con_rol = []
-    for usuario, rol in resultados:
+    for usuario, rol, activo in resultados:
         usuarios_con_rol.append({
             "id_usuario": usuario.id_usuario,
             "nombre": usuario.nombre,
             "email": usuario.email,
             "id_rol": rol.id_rol,
-            "rol": rol.nombre
+            "rol": rol.nombre,
+            "activo": bool(activo),
         })
 
     return usuarios_con_rol

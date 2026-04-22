@@ -37,6 +37,9 @@ class UsuarioRol(Base):
     id_rol = Column(Integer, ForeignKey("roles.id_rol"), nullable=False)
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)
 
+    # Estado: si el usuario está activo en la liga
+    activo = Column(Integer, default=1, nullable=False)  # 1 = activo, 0 = pendiente
+
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)

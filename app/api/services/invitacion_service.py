@@ -70,7 +70,8 @@ def asignar_rol_directamente(
         usuario_rol = UsuarioRol(
             id_usuario=id_usuario,
             id_rol=id_rol,
-            id_liga=id_liga
+            id_liga=id_liga,
+            activo=1  # Usuario activo por defecto
         )
         db.add(usuario_rol)
         db.commit()
@@ -266,7 +267,8 @@ def aceptar_invitacion(
     usuario_rol = UsuarioRol(
         id_usuario=usuario.id_usuario,
         id_rol=invitacion.id_rol,
-        id_liga=invitacion.id_liga
+        id_liga=invitacion.id_liga,
+        activo=1  # Usuario activo por defecto
     )
     db.add(usuario_rol)
 

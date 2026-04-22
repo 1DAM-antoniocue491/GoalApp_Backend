@@ -170,12 +170,14 @@ class UsuarioConRolEnLigaResponse(BaseModel):
         email (EmailStr): Correo electrónico del usuario
         id_rol (int): ID del rol en esta liga
         rol (str): Nombre del rol (admin, entrenador, delegado, jugador, etc.)
+        activo (bool): Si el usuario está activo en la liga
     """
     id_usuario: int
     nombre: str
     email: EmailStr
     id_rol: int
     rol: str
+    activo: bool
 
     class Config:
         from_attributes = True
