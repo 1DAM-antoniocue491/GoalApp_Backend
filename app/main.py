@@ -49,7 +49,8 @@ from .api.routers import (
     alineaciones,
     tokens_recuperacion,
     invitaciones,
-    public
+    public,
+    estadisticas
 )
 
 
@@ -274,6 +275,13 @@ app.include_router(
     public.router,
     prefix="/api/v1",
     tags=["Público"]
+)
+
+# Estadísticas
+app.include_router(
+    estadisticas.router,
+    prefix="/api/v1",
+    tags=["Estadísticas"]
 )
 
 
