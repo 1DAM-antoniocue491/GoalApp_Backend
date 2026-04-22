@@ -13,6 +13,7 @@ from app.api.services.invitacion_service import (
     crear_invitacion,
     validar_token_invitacion,
     aceptar_invitacion,
+    aceptar_invitacion_usuario_existente,
     verificar_usuario_existente
 )
 
@@ -217,3 +218,103 @@ def aceptar_invitacion_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.post("/aceptar-existente/{token}")
+def aceptar_invitacion_existente_endpoint(
+    token: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Aceptar una invitación cuando el usuario ya tiene cuenta.
+
+    Valida el token y activa el rol del usuario en la liga.
+
+    Parámetros:
+        - token (str): Token de invitación
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    """
+    try:
+        aceptar_invitacion_usuario_existente(
+            db=db,
+            token=token,
+            usuario_id=current_user.id_usuario
+        )
+
+        return {
+            "mensaje": "Invitación aceptada correctamente. Rol activado.",
+            "usuario_id": current_user.id_usuario
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+# ============================================================
+# ACTIVAR USUARIO (solo admin de la liga)
+# ============================================================
+
+@router.post("/ligas/{liga_id}/usuarios/{usuario_id}/activar")
+def activar_usuario_liga(
+    liga_id: int,
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Activar manualmente un usuario en una liga.
+
+    Permite a un admin activar un usuario que está pendiente.
+
+    Parámetros:
+        - liga_id (int): ID de la liga
+        - usuario_id (int): ID del usuario a activar
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado (debe ser admin)
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin de la liga
+    """
+    # Verificar que el usuario actual es admin de la liga
+    try:
+        from app.api.services.liga_service import verificar_admin_liga
+        verificar_admin_liga(db, liga_id, current_user.id_usuario)
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos de administrador en esta liga"
+        )
+
+    # Buscar la asignación usuario-rol-liga
+    usuario_rol = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not usuario_rol:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado en esta liga"
+        )
+
+    # Activar usuario
+    usuario_rol.activo = 1
+    db.commit()
+
+    return {
+        "mensaje": "Usuario activado correctamente",
+        "usuario_id": usuario_id,
+        "liga_id": liga_id
+    }

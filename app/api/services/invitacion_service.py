@@ -71,7 +71,7 @@ def asignar_rol_directamente(
             id_usuario=id_usuario,
             id_rol=id_rol,
             id_liga=id_liga,
-            activo=1  # Usuario activo por defecto
+            activo=0  # Pendiente hasta que el usuario acepte
         )
         db.add(usuario_rol)
         db.commit()
@@ -263,12 +263,12 @@ def aceptar_invitacion(
     # Obtener invitación
     invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
 
-    # Asignar rol al usuario en la liga
+    # Asignar rol al usuario en la liga (activo porque acaba de aceptar)
     usuario_rol = UsuarioRol(
         id_usuario=usuario.id_usuario,
         id_rol=invitacion.id_rol,
         id_liga=invitacion.id_liga,
-        activo=1  # Usuario activo por defecto
+        activo=1  # Activo porque el usuario aceptó la invitación
     )
     db.add(usuario_rol)
 
@@ -293,3 +293,84 @@ def aceptar_invitacion(
     db.refresh(usuario)
 
     return usuario
+
+
+def aceptar_invitacion_usuario_existente(
+    db: Session,
+    token: str,
+    usuario_id: int
+) -> bool:
+    """
+    Acepta una invitación cuando el usuario ya tiene cuenta.
+
+    Valida el token, actualiza el estado activo del usuario en la liga
+    y marca la invitación como usada.
+
+    Args:
+        db: Sesión de base de datos
+        token: Token de la invitación
+        usuario_id: ID del usuario que acepta
+
+    Returns:
+        bool: True si se aceptó correctamente
+
+    Raises:
+        ValueError: Si el token es inválido o el email no coincide
+    """
+    # Validar token
+    validacion = validar_token_invitacion(db, token)
+    if not validacion["valido"]:
+        raise ValueError(f"Invitación inválida: {validacion.get('motivo', 'desconocido')}")
+
+    # Obtener usuario
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    if not usuario:
+        raise ValueError("Usuario no encontrado")
+
+    # Verificar que el email coincide
+    if usuario.email.lower() != validacion["email"].lower():
+        raise ValueError("El email no coincide con la invitación")
+
+    # Obtener invitación
+    invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
+
+    # Verificar si ya existe la asignación de rol
+    usuario_rol = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_rol == invitacion.id_rol,
+        UsuarioRol.id_liga == invitacion.id_liga
+    ).first()
+
+    if usuario_rol:
+        # Actualizar a activo
+        usuario_rol.activo = 1
+    else:
+        # Crear nueva asignación activa
+        usuario_rol = UsuarioRol(
+            id_usuario=usuario_id,
+            id_rol=invitacion.id_rol,
+            id_liga=invitacion.id_liga,
+            activo=1
+        )
+        db.add(usuario_rol)
+
+    # Si hay equipo, actualizar el equipo del jugador (si es rol player)
+    if invitacion.id_equipo and invitacion.id_rol:
+        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
+        if rol and rol.nombre == "jugador":
+            # Crear jugador asociado al equipo
+            from app.models.jugador import Jugador
+            jugador = Jugador(
+                id_usuario=usuario_id,
+                id_equipo=invitacion.id_equipo,
+                dorsal=invitacion.dorsal,
+                posicion=invitacion.posicion,
+                tipo_jugador=invitacion.tipo_jugador or "titular"
+            )
+            db.add(jugador)
+
+    # Marcar invitación como usada
+    invitacion.usada = True
+    db.commit()
+
+    return True
