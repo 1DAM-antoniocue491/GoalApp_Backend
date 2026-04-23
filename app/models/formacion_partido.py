@@ -5,6 +5,7 @@ Registra qué formación táctica usó cada equipo en un partido concreto.
 """
 from sqlalchemy import Column, Integer, ForeignKey, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
 

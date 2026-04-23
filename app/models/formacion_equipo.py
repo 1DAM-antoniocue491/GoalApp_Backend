@@ -5,6 +5,7 @@ Vincula un equipo con su formación táctica preferida.
 """
 from sqlalchemy import Column, Integer, ForeignKey, DateTime
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from ..database.connection import Base
 
 

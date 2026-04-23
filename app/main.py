@@ -10,7 +10,11 @@ from contextlib import asynccontextmanager
 from .config import settings
 from .database.connection import engine, Base
 
-# Importar modelos para que se creen las tablas
+# Importar todos los modelos primero para registrar las clases en SQLAlchemy
+# Esto evita errores de resolución de nombres en relaciones con string references
+from .models import __all__ as models_all  # noqa: F401 - Registra todos los modelos
+
+# Importar modelos individualmente para crear las tablas (necesario para metadata)
 from .models import (
     usuario,
     rol,
@@ -28,6 +32,9 @@ from .models import (
     alineacion_partido,
     token_recuperacion,
     invitacion,
+    usuario_sigue_liga,
+    formacion_equipo,
+    formacion_partido,
 )
 
 # Importar todos los routers
