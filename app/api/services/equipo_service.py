@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Equipo.
 Maneja operaciones CRUD de equipos de fútbol, incluyendo gestión de datos,
 asociaciones con liga, entrenador y delegado.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, case, or_
 from app.models.equipo import Equipo
 from app.models.partido import Partido
@@ -105,7 +105,7 @@ def actualizar_equipo(db: Session, equipo_id: int, datos: EquipoUpdate):
 
 def eliminar_equipo(db: Session, equipo_id: int):
     """
-    Elimina un equipo de la base de datos.
+    Elimina un equipo de la base de datos junto con todos sus dependientes.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
@@ -114,7 +114,16 @@ def eliminar_equipo(db: Session, equipo_id: int):
     Raises:
         ValueError: Si el equipo no existe
     """
-    equipo = obtener_equipo_por_id(db, equipo_id)
+    # Cargar el equipo con todas sus relaciones para que cascade delete funcione
+    equipo = db.query(Equipo).options(
+        joinedload(Equipo.jugadores),
+        joinedload(Equipo.formaciones_equipo),
+        joinedload(Equipo.formaciones_partido),
+        joinedload(Equipo.partidos_local),
+        joinedload(Equipo.partidos_visitante),
+        joinedload(Equipo.invitaciones),
+    ).filter(Equipo.id_equipo == equipo_id).first()
+
     if not equipo:
         raise ValueError("Equipo no encontrado")
 

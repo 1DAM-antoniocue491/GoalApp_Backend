@@ -66,7 +66,7 @@ class Invitacion(Base):
 
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
-    liga = relationship("Liga", lazy="raise")
-    equipo = relationship("Equipo", lazy="raise")
+    liga = relationship("Liga", back_populates="invitaciones", lazy="raise")
+    equipo = relationship("Equipo", back_populates="invitaciones", lazy="raise")
     rol = relationship("Rol", lazy="raise")
     invitador = relationship("Usuario", lazy="raise", foreign_keys=[invitado_por])

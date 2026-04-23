@@ -58,7 +58,12 @@ class Partido(Base):
 
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
-    liga = relationship("Liga", lazy="raise")
+    # cascade="all, delete-orphan" asegura que al eliminar el partido se eliminen sus dependientes
+    liga = relationship("Liga", back_populates="partidos", lazy="raise")
     jornada = relationship("Jornada", back_populates="partidos", lazy="raise")
     equipo_local = relationship("Equipo", foreign_keys=[id_equipo_local], lazy="raise")
     equipo_visitante = relationship("Equipo", foreign_keys=[id_equipo_visitante], lazy="raise")
+    eventos = relationship("EventoPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
+    alineaciones = relationship("AlineacionPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
+    convocatorias = relationship("ConvocatoriaPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
+    formaciones = relationship("FormacionPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")

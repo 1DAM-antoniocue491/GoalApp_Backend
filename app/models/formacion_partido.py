@@ -37,3 +37,9 @@ class FormacionPartido(Base):
     # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relaciones ORM
+    # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    partido = relationship("Partido", back_populates="formaciones", lazy="raise")
+    equipo = relationship("Equipo", back_populates="formaciones_partido", lazy="raise")
+    formacion = relationship("Formacion", lazy="raise")

@@ -44,5 +44,5 @@ class ConvocatoriaPartido(Base):
 
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
-    partido = relationship("Partido", lazy="raise")
+    partido = relationship("Partido", back_populates="convocatorias", lazy="raise")
     jugador = relationship("Jugador", lazy="raise")

@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Liga.
 Maneja operaciones CRUD de ligas/competiciones, incluyendo gestión de
 nombres y temporadas, y asignación automática del rol admin al creador.
 """
-from sqlalchemy.orm import Session, noload, joinedload
+from sqlalchemy.orm import Session, noload, joinedload, selectinload
 from typing import List
 from collections import defaultdict
 
@@ -250,7 +250,7 @@ def desactivar_liga(db: Session, liga_id: int) -> Liga:
 
 def eliminar_liga(db: Session, liga_id: int):
     """
-    Elimina una liga de la base de datos.
+    Elimina una liga de la base de datos junto con todos sus dependientes.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
@@ -259,7 +259,17 @@ def eliminar_liga(db: Session, liga_id: int):
     Raises:
         ValueError: Si la liga no existe
     """
-    liga = obtener_liga_por_id(db, liga_id)
+    # Cargar la liga con todas sus relaciones para que cascade delete funcione
+    liga = db.query(Liga).options(
+        joinedload(Liga.equipos),
+        joinedload(Liga.configuracion),
+        joinedload(Liga.usuario_roles),
+        joinedload(Liga.jornadas),
+        joinedload(Liga.invitaciones),
+        joinedload(Liga.seguidores),
+        joinedload(Liga.partidos),
+    ).filter(Liga.id_liga == liga_id).first()
+
     if not liga:
         raise ValueError("Liga no encontrada")
 

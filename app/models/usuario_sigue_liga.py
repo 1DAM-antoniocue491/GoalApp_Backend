@@ -43,4 +43,4 @@ class UsuarioSigueLiga(Base):
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
     usuario = relationship("Usuario", lazy="raise")
-    liga = relationship("Liga", lazy="raise")
+    liga = relationship("Liga", back_populates="seguidores", lazy="raise")

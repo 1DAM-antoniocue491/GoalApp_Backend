@@ -47,5 +47,6 @@ class Jornada(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
-    liga = relationship("Liga", back_populates="jornadas")
-    partidos = relationship("Partido", back_populates="jornada", foreign_keys="Partido.id_jornada")
+    # cascade="all, delete-orphan" asegura que al eliminar la jornada se eliminen sus partidos
+    liga = relationship("Liga", back_populates="jornadas", lazy="raise")
+    partidos = relationship("Partido", back_populates="jornada", lazy="raise", cascade="all, delete-orphan")

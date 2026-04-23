@@ -49,6 +49,6 @@ class AlineacionPartido(Base):
 
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
-    partido = relationship("Partido", lazy="raise")
+    partido = relationship("Partido", back_populates="alineaciones", lazy="raise")
     jugador = relationship("Jugador", lazy="raise")
     posicion = relationship("PosicionFormacion", lazy="raise")
