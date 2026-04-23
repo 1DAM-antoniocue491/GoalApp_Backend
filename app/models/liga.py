@@ -49,7 +49,8 @@ class Liga(Base):
 
     # Relaciones
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
-    equipos = relationship("Equipo", back_populates="liga", lazy="raise")
-    configuracion = relationship("LigaConfiguracion", back_populates="liga", uselist=False, lazy="raise")
-    usuario_roles = relationship("UsuarioRol", back_populates="liga", lazy="raise")
+    # cascade="all, delete-orphan" asegura que al eliminar la liga se eliminen todos los dependientes
+    equipos = relationship("Equipo", back_populates="liga", lazy="raise", cascade="all, delete-orphan")
+    configuracion = relationship("LigaConfiguracion", back_populates="liga", uselist=False, lazy="raise", cascade="all, delete-orphan")
+    usuario_roles = relationship("UsuarioRol", back_populates="liga", lazy="raise", cascade="all, delete-orphan")
     jornadas = relationship("Jornada", back_populates="liga", lazy="raise", cascade="all, delete-orphan")

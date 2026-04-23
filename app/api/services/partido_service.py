@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Partido.
 Maneja operaciones CRUD de partidos, incluyendo gestión de equipos local y visitante,
 marcadores, fechas y estados del partido.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -50,7 +50,12 @@ def obtener_partidos(db: Session, liga_id: int = None):
     Returns:
         list[Partido]: Lista con todos los partidos (filtrados por liga si se proporciona)
     """
-    query = db.query(Partido)
+    query = db.query(Partido).options(
+        selectinload(Partido.liga),
+        selectinload(Partido.jornada),
+        selectinload(Partido.equipo_local),
+        selectinload(Partido.equipo_visitante)
+    )
     if liga_id is not None:
         query = query.filter(Partido.id_liga == liga_id)
     return query.all()
