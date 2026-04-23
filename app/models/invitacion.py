@@ -20,6 +20,7 @@ class Invitacion(Base):
         id_invitacion (int): Identificador único de la invitación (Primary Key)
         token (str): Token único y seguro para la invitación
         email (str): Email del usuario invitado
+        nombre (str): Nombre completo del usuario invitado
         id_liga (int): ID de la liga (Foreign Key)
         id_equipo (int): ID del equipo (Foreign Key, nullable para rol viewer)
         id_rol (int): ID del rol asignado (Foreign Key)
@@ -40,6 +41,7 @@ class Invitacion(Base):
     # Token y email
     token = Column(String(64), nullable=False, unique=True, index=True)
     email = Column(String(120), nullable=False, index=True)
+    nombre = Column(String(100), nullable=True)  # Nombre completo del invitado
 
     # Relación: liga, equipo, rol
     id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)

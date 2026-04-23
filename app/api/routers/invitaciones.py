@@ -42,25 +42,125 @@ def invitar_a_liga(
 
     Parámetros:
         - liga_id (int): ID de la liga (path parameter)
-        - datos (InvitacionCreate): Email, rol, equipo, dorsal, posición, tipo de jugador
+        - datos (InvitacionCreate): Nombre, email, rol, equipo, dorsal, posición, tipo de jugador
         - db (Session): Sesión de base de datos
-        - current_user: Usuario autenticado (debe ser admin de la liga)
+        - current_user: Usuario autenticado (admin de liga o entrenador)
 
     Returns:
         dict: Mensaje indicando si se creó invitación o se asignó rol directamente
 
     Requiere autenticación: Sí
-    Roles permitidos: Admin de la liga
+    Roles permitidos:
+        - Admin de liga: puede invitar cualquier rol
+        - Entrenador: solo puede invitar delegado o jugador para su equipo
     """
-    # Verificar que el usuario actual es admin de la liga
-    try:
-        from app.api.services.liga_service import verificar_admin_liga
-        verificar_admin_liga(db, liga_id, current_user.id_usuario)
-    except PermissionError:
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
+
+    # Obtener el rol del usuario actual en esta liga
+    usuario_rol_actual = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == current_user.id_usuario,
+        UsuarioRol.id_liga == liga_id,
+        UsuarioRol.activo == 1
+    ).first()
+
+    if not usuario_rol_actual:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permisos de administrador en esta liga"
+            detail="No tienes ningún rol en esta liga"
         )
+
+    # Obtener nombre del rol actual
+    rol_actual = db.query(Rol).filter(Rol.id_rol == usuario_rol_actual.id_rol).first()
+    if not rol_actual:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Rol no válido"
+        )
+
+    # Validar permisos según el rol del usuario que invita
+    # Los nombres de roles en BD están en inglés: admin, coach, player, delegate, viewer
+    if rol_actual.nombre == "admin":
+        # Admin puede invitar a cualquier rol
+        pass
+    elif rol_actual.nombre == "coach":
+        # Coach solo puede invitar delegate o player
+        rol_a_asignar = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+        if not rol_a_asignar:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rol a asignar no válido"
+            )
+        if rol_a_asignar.nombre not in ["delegate", "player"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como entrenador, solo puedes invitar delegados o jugadores"
+            )
+        # Entrenador debe especificar equipo
+        if not datos.id_equipo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debes especificar el equipo para el que se invita al usuario"
+            )
+        # Validar que el equipo pertenece a esta liga y que el entrenador es de ese equipo
+        from app.models.equipo import Equipo
+        equipo = db.query(Equipo).filter(Equipo.id_equipo == datos.id_equipo).first()
+        if not equipo or equipo.id_liga != liga_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El equipo no pertenece a esta liga"
+            )
+        # Validar que el entrenador pertenece a este equipo
+        if equipo.id_entrenador != current_user.id_usuario:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo puedes invitar jugadores/delegados para tu propio equipo"
+            )
+    else:
+        # Otros roles no pueden enviar invitaciones
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para enviar invitaciones"
+        )
+
+    # Validar campos requeridos según el rol a asignar
+    rol_a_asignar = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+    if not rol_a_asignar:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rol a asignar no válido"
+        )
+
+    # Validaciones por rol (nombres en inglés según BD)
+    if rol_a_asignar.nombre in ["admin", "viewer"]:
+        # No requieren equipo, dorsal, posición
+        pass
+    elif rol_a_asignar.nombre == "coach":
+        # Requiere equipo
+        if not datos.id_equipo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El entrenador debe tener un equipo asignado"
+            )
+    elif rol_a_asignar.nombre in ["delegate", "player"]:
+        # Requieren equipo
+        if not datos.id_equipo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Este rol requiere un equipo asignado"
+            )
+        # Player requiere dorsal y posición
+        if rol_a_asignar.nombre == "player":
+            if not datos.dorsal:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El jugador debe tener un dorsal asignado"
+                )
+            if not datos.posicion:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El jugador debe tener una posición asignada"
+                )
 
     # Verificar si el usuario ya existe por email
     usuario_existente = verificar_usuario_existente(db, datos.email)
@@ -76,7 +176,8 @@ def invitar_a_liga(
             id_equipo=datos.id_equipo,
             dorsal=datos.dorsal,
             posicion=datos.posicion,
-            tipo_jugador=datos.tipo_jugador
+            tipo_jugador=datos.tipo_jugador,
+            nombre=datos.nombre
         )
         return {
             "mensaje": f"El usuario {datos.email} ya estaba registrado. Se le ha asignado el rol directamente.",
@@ -94,7 +195,8 @@ def invitar_a_liga(
         dorsal=datos.dorsal,
         posicion=datos.posicion,
         tipo_jugador=datos.tipo_jugador,
-        invitado_por=current_user.id_usuario
+        invitado_por=current_user.id_usuario,
+        nombre=datos.nombre
     )
 
     # Enviar email de invitación (en background)

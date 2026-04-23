@@ -147,12 +147,14 @@ class LigaConRolResponse(BaseModel):
         temporada (str): Temporada de la liga
         activa (bool): Si la liga esta activa
         rol (str): Nombre del rol del usuario en esta liga
+        equipos_total (int): Cantidad de equipos inscritos en la liga
     """
     id_liga: int
     nombre: str
     temporada: str
     activa: bool
     rol: str
+    equipos_total: int = 0
 
     class Config:
         from_attributes = True

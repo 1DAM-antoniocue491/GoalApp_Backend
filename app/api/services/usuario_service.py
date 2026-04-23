@@ -554,10 +554,13 @@ def obtener_ligas_con_rol(db: Session, usuario_id: int):
                      - temporada: Temporada de la liga
                      - activa: Si la liga esta activa
                      - rol: Nombre del rol del usuario en esta liga
+                     - equipos_total: Cantidad de equipos inscritos en la liga
     """
     from app.models.usuario_rol import UsuarioRol
     from app.models.liga import Liga
     from app.models.rol import Rol
+    from app.models.equipo import Equipo
+    from sqlalchemy import func
 
     # Query con join para obtener liga + rol del usuario
     resultados = (
@@ -571,12 +574,18 @@ def obtener_ligas_con_rol(db: Session, usuario_id: int):
     # Construir lista de respuestas con datos de liga y rol
     ligas_con_rol = []
     for liga, rol in resultados:
+        # Contar equipos de esta liga
+        equipos_count = db.query(func.count(Equipo.id_equipo)).filter(
+            Equipo.id_liga == liga.id_liga
+        ).scalar() or 0
+
         ligas_con_rol.append({
             "id_liga": liga.id_liga,
             "nombre": liga.nombre,
             "temporada": liga.temporada,
             "activa": liga.activa,
-            "rol": rol.nombre
+            "rol": rol.nombre,
+            "equipos_total": equipos_count
         })
 
     return ligas_con_rol

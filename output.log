@@ -1,0 +1,159 @@
+============================================================
+CREANDO LIGAS PARA JESUS (id_usuario=28)
+============================================================
+Conectado a Supabase: aws-0-eu-west-1.pooler.supabase.com
+Usuario 28 ya existe
+
+Creando usuarios adicionales para jugadores...
+  Usuario creado: Jugador 1 (ID: 165)
+  Usuario creado: Jugador 2 (ID: 166)
+  Usuario creado: Jugador 3 (ID: 167)
+  Usuario creado: Jugador 4 (ID: 168)
+  Usuario creado: Jugador 5 (ID: 169)
+  Usuario creado: Jugador 6 (ID: 170)
+  Usuario creado: Jugador 7 (ID: 171)
+  Usuario creado: Jugador 8 (ID: 172)
+  Usuario creado: Jugador 9 (ID: 173)
+  Usuario creado: Jugador 10 (ID: 174)
+  Usuario creado: Jugador 11 (ID: 175)
+  Usuario creado: Jugador 12 (ID: 176)
+  Usuario creado: Jugador 13 (ID: 177)
+  Usuario creado: Jugador 14 (ID: 178)
+  Usuario creado: Jugador 15 (ID: 179)
+  ... y 44 usuarios más ...
+  Usuario creado: Jugador 56 (ID: 220)
+  Usuario creado: Jugador 57 (ID: 221)
+  Usuario creado: Jugador 58 (ID: 222)
+  Usuario creado: Jugador 59 (ID: 223)
+  Usuario creado: Jugador 60 (ID: 224)
+
+============================================================
+CREANDO 5 LIGAS COMPLETAS
+============================================================
+
+============================================================
+LIGA 1: Liga de Jesus - Admin
+============================================================
+  Liga ya existe: Liga de Jesus - Admin (ID: 26)
+  Rol asignado: Usuario 28 -> Rol 2 en Liga 26
+  Rol de Jesus: ADMIN
+    Equipo ya existe: CD Norte (ID: 43)
+    Equipo ya existe: Real Sur (ID: 44)
+    Equipo ya existe: Atlético Este (ID: 45)
+    Equipo ya existe: Deportivo Oeste (ID: 46)
+
+  Creando 12 partidos (ida y vuelta)...
+    Partido 1: Equipo 1 (4) vs Equipo 2 (2)
+    Partido 2: Equipo 1 (5) vs Equipo 3 (1)
+    Partido 3: Equipo 1 (1) vs Equipo 4 (3)
+    Partido 4: Equipo 2 (1) vs Equipo 3 (4)
+    Partido 5: Equipo 2 (1) vs Equipo 4 (1)
+    Partido 6: Equipo 3 (5) vs Equipo 4 (0)
+
+  Generando eventos para 6 partidos...
+  Eventos generados correctamente!
+
+============================================================
+LIGA 2: Liga de Jesus - Entrenador
+============================================================
+  Liga ya existe: Liga de Jesus - Entrenador (ID: 27)
+  Rol asignado: Usuario 28 -> Rol 3 en Liga 27
+  Rol de Jesus: COACH
+    Equipo ya existe: FC Barcelona B (ID: 47)
+    Equipo ya existe: Real Madrid C (ID: 48)
+    Equipo ya existe: Atlético D (ID: 49)
+    Equipo ya existe: Sevilla E (ID: 50)
+
+  Creando 12 partidos (ida y vuelta)...
+    Partido 1: Equipo 1 (2) vs Equipo 2 (0)
+    Partido 2: Equipo 1 (1) vs Equipo 3 (1)
+    Partido 3: Equipo 1 (4) vs Equipo 4 (5)
+    Partido 4: Equipo 2 (0) vs Equipo 3 (3)
+    Partido 5: Equipo 2 (2) vs Equipo 4 (0)
+    Partido 6: Equipo 3 (3) vs Equipo 4 (5)
+
+  Generando eventos para 6 partidos...
+  Eventos generados correctamente!
+
+============================================================
+LIGA 3: Liga de Jesus - Delegado
+============================================================
+  Liga ya existe: Liga de Jesus - Delegado (ID: 28)
+  Rol asignado: Usuario 28 -> Rol 6 en Liga 28
+  Rol de Jesus: DELEGATE
+    Equipo ya existe: Valencia F (ID: 51)
+    Equipo ya existe: Betis G (ID: 52)
+    Equipo ya existe: Athletic H (ID: 53)
+    Equipo creado: Real Sociedad I (ID: 54)
+
+  Creando 12 partidos (ida y vuelta)...
+    Partido 1: Equipo 1 (4) vs Equipo 2 (0)
+    Partido 2: Equipo 1 (3) vs Equipo 3 (4)
+    Partido 3: Equipo 1 (5) vs Equipo 4 (2)
+    Partido 4: Equipo 2 (1) vs Equipo 3 (5)
+    Partido 5: Equipo 2 (0) vs Equipo 4 (3)
+    Partido 6: Equipo 3 (3) vs Equipo 4 (0)
+
+  Generando eventos para 6 partidos...
+  Eventos generados correctamente!
+
+============================================================
+LIGA 4: Liga de Jesus - Jugador
+============================================================
+  Liga creada: Liga de Jesus - Jugador (ID: 29)
+  Rol asignado: Usuario 28 -> Rol 4 en Liga 29
+  Rol de Jesus: PLAYER
+    Equipo creado: Villarreal J (ID: 56)
+    Equipo creado: Celta K (ID: 57)
+    Equipo creado: Espanyol L (ID: 58)
+    Equipo creado: Getafe M (ID: 59)
+
+  Creando 12 partidos (ida y vuelta)...
+    Partido 1: Equipo 1 (5) vs Equipo 2 (4)
+    Partido 2: Equipo 1 (0) vs Equipo 3 (3)
+    Partido 3: Equipo 1 (4) vs Equipo 4 (2)
+    Partido 4: Equipo 2 (1) vs Equipo 3 (4)
+    Partido 5: Equipo 2 (0) vs Equipo 4 (3)
+    Partido 6: Equipo 3 (1) vs Equipo 4 (4)
+
+  Generando eventos para 6 partidos...
+  Eventos generados correctamente!
+
+============================================================
+LIGA 5: Liga de Jesus - Observador
+============================================================
+  Liga creada: Liga de Jesus - Observador (ID: 30)
+  Rol asignado: Usuario 28 -> Rol 5 en Liga 30
+  Rol de Jesus: VIEWER
+    Equipo creado: Osasuna N (ID: 60)
+    Equipo creado: Girona O (ID: 61)
+    Equipo creado: Rayo P (ID: 62)
+    Equipo creado: Alavés Q (ID: 63)
+
+  Creando 12 partidos (ida y vuelta)...
+    Partido 1: Equipo 1 (2) vs Equipo 2 (3)
+    Partido 2: Equipo 1 (4) vs Equipo 3 (4)
+    Partido 3: Equipo 1 (4) vs Equipo 4 (5)
+    Partido 4: Equipo 2 (4) vs Equipo 3 (4)
+    Partido 5: Equipo 2 (4) vs Equipo 4 (2)
+    Partido 6: Equipo 3 (2) vs Equipo 4 (5)
+
+  Generando eventos para 6 partidos...
+  Eventos generados correctamente!
+
+============================================================
+¡PROCESO COMPLETADO EXITOSAMENTE!
+============================================================
+
+Resumen:
+  - 5 ligas creadas
+  - 20 equipos creados (4 por liga)
+  - 60 partidos creados (12 por liga)
+  - Eventos de goles, tarjetas y MVP generados
+
+Jesus tiene los siguientes roles:
+  - Liga 1: ADMIN
+  - Liga 2: COACH (Entrenador)
+  - Liga 3: DELEGATE (Delegado)
+  - Liga 4: PLAYER (Jugador)
+  - Liga 5: VIEWER (Observador)

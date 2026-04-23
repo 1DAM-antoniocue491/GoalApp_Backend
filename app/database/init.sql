@@ -24,9 +24,13 @@ CREATE TABLE roles (
 
 CREATE TABLE ligas (
     id_liga SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
     temporada VARCHAR(20) NOT NULL,
-    activa BOOLEAN DEFAULT TRUE,
+    categoria VARCHAR(50) NULL,
+    activa BOOLEAN DEFAULT TRUE NOT NULL,
+    cantidad_partidos INT NULL,
+    duracion_partido INT NULL,
+    logo_url TEXT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ NULL
 );
@@ -36,7 +40,14 @@ CREATE TABLE posicion_formacion (
     nombre VARCHAR(50) NOT NULL,
     descripcion VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NULL
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE formaciones (
+    id_formacion SERIAL PRIMARY KEY,
+    nombre VARCHAR(20) NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Tablas con foreign keys a tablas independientes
@@ -45,10 +56,13 @@ CREATE TABLE usuario_rol (
     id_usuario_rol SERIAL PRIMARY KEY,
     id_usuario INT NOT NULL,
     id_rol INT NOT NULL,
+    id_liga INT NOT NULL,
+    activo INT NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
-    FOREIGN KEY (id_rol) REFERENCES roles(id_rol) ON DELETE CASCADE
+    FOREIGN KEY (id_rol) REFERENCES roles(id_rol) ON DELETE CASCADE,
+    FOREIGN KEY (id_liga) REFERENCES ligas(id_liga) ON DELETE CASCADE
 );
 
 CREATE TABLE usuario_sigue_liga (
@@ -65,26 +79,45 @@ CREATE TABLE liga_configuracion (
     id_configuracion SERIAL PRIMARY KEY,
     id_liga INT NOT NULL UNIQUE,
     hora_partidos TIME NOT NULL DEFAULT '17:00:00',
+    min_equipos INT NOT NULL DEFAULT 2,
     max_equipos INT NOT NULL DEFAULT 20,
+    min_convocados INT NOT NULL DEFAULT 14,
+    max_convocados INT NOT NULL DEFAULT 22,
+    min_plantilla INT NOT NULL DEFAULT 11,
+    max_plantilla INT NOT NULL DEFAULT 25,
     min_jugadores_equipo INT NOT NULL DEFAULT 7,
     min_partidos_entre_equipos INT NOT NULL DEFAULT 2,
+    minutos_partido INT NOT NULL DEFAULT 90,
+    max_partidos INT NOT NULL DEFAULT 30,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ NULL,
     FOREIGN KEY (id_liga) REFERENCES ligas(id_liga) ON DELETE CASCADE
 );
 
+CREATE TABLE jornadas (
+    id_jornada SERIAL PRIMARY KEY,
+    id_liga INT NOT NULL,
+    numero INT NOT NULL,
+    nombre VARCHAR(50) NOT NULL,
+    fecha_inicio TIMESTAMPTZ,
+    fecha_fin TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (id_liga) REFERENCES ligas(id_liga) ON DELETE CASCADE
+);
+
 CREATE TABLE equipos (
     id_equipo SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
     ciudad VARCHAR(255),
     escudo VARCHAR(255),
     colores VARCHAR(50),
     id_liga INT NOT NULL,
-    id_entrenador INT NOT NULL,
-    id_delegado INT NOT NULL,
+    id_entrenador INT NULL,
+    id_delegado INT NULL,
     estadio VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (id_liga) REFERENCES ligas(id_liga),
     FOREIGN KEY (id_entrenador) REFERENCES usuarios(id_usuario),
     FOREIGN KEY (id_delegado) REFERENCES usuarios(id_usuario)
@@ -106,15 +139,17 @@ CREATE TABLE jugadores (
 CREATE TABLE partidos (
     id_partido SERIAL PRIMARY KEY,
     id_liga INT NOT NULL,
+    id_jornada INT NULL,
     id_equipo_local INT NOT NULL,
     id_equipo_visitante INT NOT NULL,
     fecha TIMESTAMPTZ NOT NULL,
-    estado VARCHAR(50) NOT NULL CHECK (estado IN ('programado', 'en_juego', 'finalizado', 'cancelado')),
+    estado VARCHAR(50) NOT NULL,
     goles_local INT,
     goles_visitante INT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (id_liga) REFERENCES ligas(id_liga),
+    FOREIGN KEY (id_jornada) REFERENCES jornadas(id_jornada),
     FOREIGN KEY (id_equipo_local) REFERENCES equipos(id_equipo),
     FOREIGN KEY (id_equipo_visitante) REFERENCES equipos(id_equipo)
 );
@@ -138,10 +173,32 @@ CREATE TABLE alineacion_partido (
     id_posicion INT NOT NULL,
     titular BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (id_partido) REFERENCES partidos(id_partido),
     FOREIGN KEY (id_jugador) REFERENCES jugadores(id_jugador),
     FOREIGN KEY (id_posicion) REFERENCES posicion_formacion(id_posicion)
+);
+
+CREATE TABLE formacion_equipo (
+    id_formacion_equipo SERIAL PRIMARY KEY,
+    id_equipo INT NOT NULL,
+    id_formacion INT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo),
+    FOREIGN KEY (id_formacion) REFERENCES formaciones(id_formacion)
+);
+
+CREATE TABLE formacion_partido (
+    id_formacion_partido SERIAL PRIMARY KEY,
+    id_partido INT NOT NULL,
+    id_equipo INT NOT NULL,
+    id_formacion INT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (id_partido) REFERENCES partidos(id_partido),
+    FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo),
+    FOREIGN KEY (id_formacion) REFERENCES formaciones(id_formacion)
 );
 
 CREATE TABLE notificaciones (
@@ -174,6 +231,30 @@ CREATE TABLE tokens_recuperacion (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
 );
+
+CREATE TABLE invitaciones (
+    id_invitacion SERIAL PRIMARY KEY,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    email VARCHAR(120) NOT NULL,
+    id_liga INT NOT NULL,
+    id_equipo INT,
+    id_rol INT NOT NULL,
+    dorsal VARCHAR(10),
+    posicion VARCHAR(50),
+    tipo_jugador VARCHAR(50),
+    invitado_por INT NOT NULL,
+    fecha_expiracion TIMESTAMPTZ NOT NULL,
+    usada BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (id_liga) REFERENCES ligas(id_liga),
+    FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo),
+    FOREIGN KEY (id_rol) REFERENCES roles(id_rol),
+    FOREIGN KEY (invitado_por) REFERENCES usuarios(id_usuario)
+);
+
+CREATE INDEX idx_invitaciones_token ON invitaciones(token);
+CREATE INDEX idx_invitaciones_email ON invitaciones(email);
 
 -- Datos iniciales
 

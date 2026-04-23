@@ -15,13 +15,15 @@ class InvitacionCreate(BaseModel):
     invita a un usuario a unirse a su liga con un rol específico.
 
     Attributes:
+        nombre (str): Nombre completo del usuario invitado
         email (EmailStr): Email del usuario invitado
-        id_rol (int): ID del rol a asignar (admin, coach, delegate, player, viewer)
+        id_rol (int): ID del rol a asignar (1=admin, 2=coach, 3=delegate, 4=player, 5=viewer)
         id_equipo (int | None): ID del equipo (nullable para rol viewer)
         dorsal (str | None): Número de dorsal asignado
         posicion (str | None): Posición del jugador
         tipo_jugador (str | None): Tipo de jugador (titular, suplente, etc.)
     """
+    nombre: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     id_rol: int = Field(..., ge=1)
     id_equipo: Optional[int] = Field(None, ge=1)
@@ -40,6 +42,7 @@ class InvitacionValidarResponse(BaseModel):
     Attributes:
         valido (bool): True si el token es válido
         email (str | None): Email del invitado (si es válido)
+        nombre (str | None): Nombre completo del invitado (si es válido)
         liga_nombre (str | None): Nombre de la liga (si es válido)
         equipo_nombre (str | None): Nombre del equipo (si es válido)
         rol (str | None): Nombre del rol (si es válido)
@@ -50,6 +53,7 @@ class InvitacionValidarResponse(BaseModel):
     """
     valido: bool
     email: Optional[str] = None
+    nombre: Optional[str] = None
     liga_nombre: Optional[str] = None
     equipo_nombre: Optional[str] = None
     rol: Optional[str] = None

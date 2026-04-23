@@ -44,7 +44,8 @@ def asignar_rol_directamente(
     id_equipo: Optional[int] = None,
     dorsal: Optional[str] = None,
     posicion: Optional[str] = None,
-    tipo_jugador: Optional[str] = None
+    tipo_jugador: Optional[str] = None,
+    nombre: Optional[str] = None
 ) -> None:
     """
     Asigna un rol a un usuario existente en una liga.
@@ -58,6 +59,7 @@ def asignar_rol_directamente(
         dorsal: Dorsal asignado (opcional)
         posicion: Posición del jugador (opcional)
         tipo_jugador: Tipo de jugador (opcional)
+        nombre: Nombre del usuario (para actualizar si no tiene)
     """
     # Verificar que no exista ya la asignación
     asignacion_existente = db.query(UsuarioRol).filter(
@@ -76,6 +78,25 @@ def asignar_rol_directamente(
         db.add(usuario_rol)
         db.commit()
 
+    # Si es rol jugador y hay equipo, crear entrada en Jugador
+    rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
+    if rol and rol.nombre == "player" and id_equipo:
+        # Verificar si ya existe el jugador
+        jugador_existente = db.query(Jugador).filter(
+            Jugador.id_usuario == id_usuario,
+            Jugador.id_equipo == id_equipo
+        ).first()
+        if not jugador_existente:
+            jugador = Jugador(
+                id_usuario=id_usuario,
+                id_equipo=id_equipo,
+                dorsal=dorsal,
+                posicion=posicion,
+                tipo_jugador=tipo_jugador or "titular"
+            )
+            db.add(jugador)
+            db.commit()
+
 
 def crear_invitacion(
     db: Session,
@@ -86,7 +107,8 @@ def crear_invitacion(
     dorsal: Optional[str] = None,
     posicion: Optional[str] = None,
     tipo_jugador: Optional[str] = None,
-    invitado_por: Optional[int] = None
+    invitado_por: Optional[int] = None,
+    nombre: Optional[str] = None
 ) -> Invitacion:
     """
     Crea una nueva invitación en la base de datos.
@@ -104,6 +126,7 @@ def crear_invitacion(
         posicion: Posición del jugador (opcional)
         tipo_jugador: Tipo de jugador (opcional)
         invitado_por: ID del usuario que envía la invitación (opcional)
+        nombre: Nombre completo del usuario invitado (opcional)
 
     Returns:
         Invitacion: Objeto Invitacion creado con su token
@@ -118,6 +141,7 @@ def crear_invitacion(
     invitacion = Invitacion(
         token=token,
         email=email.lower().strip(),
+        nombre=nombre,
         id_liga=id_liga,
         id_equipo=id_equipo,
         id_rol=id_rol,
@@ -150,10 +174,10 @@ def crear_invitacion(
 
         enviar_email_invitacion(
             email_destino=email,
-            nombre_invitado=email.split('@')[0],  # Usar parte local del email como nombre
+            nombre_invitado=nombre or email.split('@')[0],  # Usar nombre proporcionado o parte local del email
             liga_nombre=liga.nombre if liga else "Liga",
             equipo_nombre=equipo.nombre if equipo else None,
-            rol=rol.nombre if rol else "jugador",
+            rol=rol.nombre if rol else "player",
             dorsal=dorsal or "-",
             posicion=posicion or "-",
             tipo_jugador=tipo_jugador or "titular",
@@ -205,9 +229,10 @@ def validar_token_invitacion(db: Session, token: str) -> Dict[str, Any]:
     return {
         "valido": True,
         "email": invitacion.email,
+        "nombre": invitacion.nombre,
         "liga_nombre": liga.nombre if liga else "Desconocida",
         "equipo_nombre": equipo.nombre if equipo else None,
-        "rol": rol.nombre if rol else "Desconocido",
+        "rol": rol.nombre if rol else "player",
         "dorsal": invitacion.dorsal,
         "posicion": invitacion.posicion,
         "tipo_jugador": invitacion.tipo_jugador
@@ -277,7 +302,6 @@ def aceptar_invitacion(
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
             # Crear jugador asociado al equipo
-            from app.models.jugador import Jugador
             jugador = Jugador(
                 id_usuario=usuario.id_usuario,
                 id_equipo=invitacion.id_equipo,
@@ -357,7 +381,7 @@ def aceptar_invitacion_usuario_existente(
     # Si hay equipo, actualizar el equipo del jugador (si es rol player)
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-        if rol and rol.nombre == "jugador":
+        if rol and rol.nombre == "player":
             # Crear jugador asociado al equipo
             from app.models.jugador import Jugador
             jugador = Jugador(
