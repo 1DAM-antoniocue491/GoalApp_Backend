@@ -2,15 +2,15 @@
 Schemas de validación para el recurso Partido.
 Define los modelos Pydantic para request/response de la API relacionados con partidos de fútbol.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from enum import Enum
 
 class EstadoPartido(str, Enum):
     """
     Enum de estados posibles de un partido.
-    
-    Values:
+
+    Value:
         programado: El partido está programado pero aún no ha comenzado
         en_juego: El partido se está jugando actualmente
         finalizado: El partido ha concluido
@@ -20,6 +20,16 @@ class EstadoPartido(str, Enum):
     en_juego = "en_juego"
     finalizado = "finalizado"
     cancelado = "cancelado"
+
+    @classmethod
+    def _missing_(cls, value):
+        """Permite aceptar valores con mayúsculas normalizándolos a minúsculas."""
+        if isinstance(value, str):
+            value_lower = value.lower()
+            for member in cls:
+                if member.value.lower() == value_lower:
+                    return member
+        return None
 
 class PartidoBase(BaseModel):
     """

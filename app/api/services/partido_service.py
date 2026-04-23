@@ -236,7 +236,7 @@ def obtener_partidos_proximos(db: Session, limit: int = 10):
         list: Lista de próximos partidos con información de equipos
     """
     partidos = db.query(Partido).filter(
-        Partido.estado == "Programado"
+        Partido.estado == "programado"
     ).order_by(Partido.fecha.asc()).limit(limit).all()
 
     resultados = []
@@ -273,7 +273,7 @@ def obtener_partidos_en_vivo(db: Session):
     Returns:
         list: Lista de partidos en vivo con información de equipos
     """
-    partidos = db.query(Partido).filter(Partido.estado == "En Juego").all()
+    partidos = db.query(Partido).filter(Partido.estado == "en_juego").all()
 
     resultados = []
     for partido in partidos:
@@ -412,7 +412,7 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                 id_equipo_local=local.id_equipo,
                 id_equipo_visitante=visitante.id_equipo,
                 fecha=fecha_partido,
-                estado="Programado",
+                estado="programado",  # Normalizado a minúscula para coincidir con el enum
                 goles_local=None,
                 goles_visitante=None
             )
@@ -480,7 +480,7 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                     id_equipo_local=visitante.id_equipo,  # Invertido
                     id_equipo_visitante=local.id_equipo,   # Invertido
                     fecha=fecha_partido,
-                    estado="Programado",
+                    estado="programado",
                     goles_local=None,
                     goles_visitante=None
                 )

@@ -148,7 +148,7 @@ def obtener_equipos_con_rendimiento(db: Session, liga_id: int):
         # Obtener todos los partidos finalizados donde participó este equipo
         partidos = db.query(Partido).filter(
             Partido.id_liga == liga_id,
-            Partido.estado == "Finalizado",
+            Partido.estado == "finalizado",
             (Partido.id_equipo_local == equipo.id_equipo) | (Partido.id_equipo_visitante == equipo.id_equipo)
         ).all()
 
@@ -211,7 +211,7 @@ def obtener_detalle_equipo(db: Session, equipo_id: int, liga_id: int = None):
 
     # Calcular estadísticas del equipo
     partidos = db.query(Partido).filter(
-        Partido.estado == "Finalizado",
+        Partido.estado == "finalizado",
         (Partido.id_equipo_local == equipo_id) | (Partido.id_equipo_visitante == equipo_id)
     ).all()
 
@@ -252,7 +252,7 @@ def obtener_detalle_equipo(db: Session, equipo_id: int, liga_id: int = None):
         for eq in equipos_liga:
             pts = 0
             parts = db.query(Partido).filter(
-                Partido.estado == "Finalizado",
+                Partido.estado == "finalizado",
                 Partido.id_liga == liga_id,
                 (Partido.id_equipo_local == eq.id_equipo) | (Partido.id_equipo_visitante == eq.id_equipo)
             ).all()
@@ -307,7 +307,7 @@ def obtener_proximos_partidos(db: Session, equipo_id: int, limit: int = 5):
         list: Lista de próximos partidos
     """
     partidos = db.query(Partido).filter(
-        Partido.estado.in_(["Programado", "En Juego"]),
+        Partido.estado.in_(["programado", "en_juego"]),
         (Partido.id_equipo_local == equipo_id) | (Partido.id_equipo_visitante == equipo_id)
     ).order_by(Partido.fecha.asc()).limit(limit).all()
 
@@ -346,7 +346,7 @@ def obtener_ultimos_partidos(db: Session, equipo_id: int, limit: int = 5):
         list: Lista de últimos partidos con resultado (W/D/L)
     """
     partidos = db.query(Partido).filter(
-        Partido.estado == "Finalizado",
+        Partido.estado == "finalizado",
         (Partido.id_equipo_local == equipo_id) | (Partido.id_equipo_visitante == equipo_id)
     ).order_by(Partido.fecha.desc()).limit(limit).all()
 
