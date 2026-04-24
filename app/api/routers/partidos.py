@@ -7,7 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role
-from app.schemas.partido import PartidoCreate, PartidoUpdate, PartidoResponse, CalendarCreateRequest, CalendarCreateResponse
+from app.schemas.partido import (
+    PartidoCreate,
+    PartidoUpdate,
+    PartidoResponse,
+    CalendarCreateRequest,
+    CalendarCreateResponse,
+    CalendarConfigResponse,
+    CalendarDeleteResponse,
+    CalendarUpdateResponse,
+)
 from app.api.services.partido_service import (
     crear_partido,
     obtener_partidos,
@@ -18,7 +27,10 @@ from app.api.services.partido_service import (
     obtener_partidos_por_jornada,
     obtener_partidos_proximos,
     obtener_partidos_en_vivo,
-    crear_calendario
+    crear_calendario,
+    obtener_config_calendario,
+    eliminar_calendario,
+    actualizar_calendario,
 )
 
 # Configuración del router
@@ -175,6 +187,86 @@ def crear_calendario_router(liga_id: int, config: CalendarCreateRequest, db: Ses
     Roles permitidos: Admin
     """
     return crear_calendario(db, liga_id, config)
+
+
+@router.get("/ligas/{liga_id}/config-calendario", response_model=CalendarConfigResponse)
+def obtener_config_calendario_router(liga_id: int, db: Session = Depends(get_db)):
+    """
+    Obtener configuración del calendario automático para una liga.
+
+    Devuelve la configuración guardada cuando se creó el calendario automático,
+    útil para pre-llenar el formulario de edición.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        CalendarConfigResponse: Configuración del calendario (tipo, fecha_inicio, dias_partido, hora)
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin, Coach, Delegate
+    """
+    config = obtener_config_calendario(db, liga_id)
+    return config
+
+
+@router.delete("/ligas/{liga_id}/calendario", response_model=CalendarDeleteResponse, dependencies=[Depends(require_role("admin"))])
+def eliminar_calendario_router(liga_id: int, db: Session = Depends(get_db)):
+    """
+    Eliminar calendario automático completo de una liga.
+
+    Elimina todos los partidos programados y jornadas de la liga.
+    No permite eliminar si hay partidos en juego o finalizados.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        CalendarDeleteResponse: Mensaje de confirmación y número de partidos/jornadas eliminados
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si hay partidos en juego o finalizados
+    """
+    try:
+        resultado = eliminar_calendario(db, liga_id)
+        return resultado
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/ligas/{liga_id}/calendario", response_model=CalendarUpdateResponse, dependencies=[Depends(require_role("admin"))])
+def actualizar_calendario_router(liga_id: int, config: CalendarCreateRequest, db: Session = Depends(get_db)):
+    """
+    Actualizar calendario automático de una liga.
+
+    Elimina los partidos programados existentes y genera un nuevo calendario
+    con la configuración proporcionada. No permite actualizar si hay partidos
+    en juego o finalizados.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - config (CalendarCreateRequest): Nueva configuración del calendario
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        CalendarUpdateResponse: Mensaje de confirmación y número de partidos creados/eliminados
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si hay partidos en juego o finalizados
+    """
+    try:
+        resultado = actualizar_calendario(db, liga_id, config)
+        return resultado
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ENDPOINTS GENÉRICOS CON ID (deben ir DESPUÉS de los específicos)

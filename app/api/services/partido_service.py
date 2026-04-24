@@ -4,12 +4,14 @@ Maneja operaciones CRUD de partidos, incluyendo gestión de equipos local y visi
 marcadores, fechas y estados del partido.
 """
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from datetime import datetime, timedelta
 from itertools import combinations
+import json
 from app.models.partido import Partido
 from app.models.equipo import Equipo
 from app.models.jornada import Jornada
+from app.models.liga_configuracion import LigaConfiguracion
 from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest
 
 
@@ -493,9 +495,151 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
 
     db.commit()
 
+    # Guardar configuración del calendario
+    config_liga = db.query(LigaConfiguracion).filter(LigaConfiguracion.id_liga == liga_id).first()
+    if config_liga:
+        config_liga.calendario_tipo = config.tipo
+        config_liga.calendario_fecha_inicio = config.fecha_inicio
+        config_liga.calendario_dias_partido = json.dumps(config.dias_partido)
+        config_liga.calendario_hora = config.hora
+        db.commit()
+
     total_jornadas = len(jornadas_ida) if config.tipo == "ida" else len(jornadas_ida) + len(jornadas_vuelta)
 
     return {
         "mensaje": f"Calendario creado con {partidos_creados} partidos distribuidos en {total_jornadas} jornadas",
         "partidos_creados": partidos_creados
+    }
+
+
+def obtener_config_calendario(db: Session, liga_id: int):
+    """
+    Obtiene la configuración guardada del calendario automático para una liga.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+
+    Returns:
+        dict: Configuración del calendario o None si no existe
+
+    Raises:
+        ValueError: Si la liga no tiene configuración de calendario
+    """
+    config_liga = db.query(LigaConfiguracion).filter(LigaConfiguracion.id_liga == liga_id).first()
+
+    if not config_liga or not config_liga.calendario_tipo:
+        raise ValueError("La liga no tiene configuración de calendario automático")
+
+    return {
+        "tipo": config_liga.calendario_tipo,
+        "fecha_inicio": config_liga.calendario_fecha_inicio,
+        "dias_partido": json.loads(config_liga.calendario_dias_partido) if config_liga.calendario_dias_partido else [],
+        "hora": config_liga.calendario_hora
+    }
+
+
+def eliminar_calendario(db: Session, liga_id: int):
+    """
+    Elimina todos los partidos y jornadas de una liga.
+    Solo elimina partidos en estado 'programado'.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+
+    Returns:
+        dict: Mensaje de confirmación y número de partidos/jornadas eliminados
+
+    Raises:
+        ValueError: Si hay partidos en juego o finalizados
+    """
+    # Verificar si hay partidos en_juego o finalizados
+    partidos_bloqueados = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado.in_(["en_juego", "finalizado"])
+    ).count()
+
+    if partidos_bloqueados > 0:
+        raise ValueError(f"No se puede eliminar el calendario con {partidos_bloqueados} partidos en juego o finalizados")
+
+    # Contar partidos a eliminar
+    partidos_count = db.query(Partido).filter(Partido.id_liga == liga_id).count()
+
+    # Obtener jornadas de la liga
+    jornadas = db.query(Jornada).filter(Jornada.id_liga == liga_id).all()
+    jornadas_count = len(jornadas)
+
+    # Eliminar partidos (cascade delete eliminaría automáticamente, pero lo hacemos explícito)
+    db.query(Partido).filter(Partido.id_liga == liga_id).delete(synchronize_session=False)
+
+    # Eliminar jornadas
+    for jornada in jornadas:
+        db.delete(jornada)
+
+    # Limpiar configuración de calendario
+    config_liga = db.query(LigaConfiguracion).filter(LigaConfiguracion.id_liga == liga_id).first()
+    if config_liga:
+        config_liga.calendario_tipo = None
+        config_liga.calendario_fecha_inicio = None
+        config_liga.calendario_dias_partido = None
+        config_liga.calendario_hora = None
+
+    db.commit()
+
+    return {
+        "mensaje": "Calendario eliminado correctamente",
+        "partidos_eliminados": partidos_count,
+        "jornadas_eliminadas": jornadas_count
+    }
+
+
+def actualizar_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
+    """
+    Actualiza el calendario automático: elimina partidos programados y crea nuevo calendario.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+        config (CalendarCreateRequest): Nueva configuración del calendario
+
+    Returns:
+        dict: Mensaje de confirmación y número de partidos creados/eliminados
+
+    Raises:
+        ValueError: Si hay partidos en juego o finalizados
+    """
+    # Verificar si hay partidos en_juego o finalizados
+    partidos_bloqueados = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado.in_(["en_juego", "finalizado"])
+    ).count()
+
+    if partidos_bloqueados > 0:
+        raise ValueError(f"No se puede actualizar el calendario con {partidos_bloqueados} partidos en juego o finalizados")
+
+    # Contar partidos programados a eliminar
+    partidos_programados = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado == "programado"
+    ).count()
+
+    # Eliminar partidos programados
+    db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado == "programado"
+    ).delete(synchronize_session=False)
+
+    # Eliminar jornadas existentes
+    db.query(Jornada).filter(Jornada.id_liga == liga_id).delete(synchronize_session=False)
+
+    db.commit()
+
+    # Crear nuevo calendario con la configuración actualizada
+    resultado = crear_calendario(db, liga_id, config)
+
+    return {
+        "mensaje": "Calendario actualizado correctamente",
+        "partidos_creados": resultado["partidos_creados"],
+        "partidos_eliminados": partidos_programados
     }

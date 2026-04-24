@@ -4,7 +4,7 @@ Modelo de Configuración de Liga para gestionar parámetros de cada liga.
 Define la configuración específica de cada competición (horarios, límites, etc.).
 """
 from datetime import time as time_type
-from sqlalchemy import Column, Integer, Time, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, Time, ForeignKey, DateTime, String, Text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
@@ -51,6 +51,12 @@ class LigaConfiguracion(Base):
     min_partidos_entre_equipos = Column(Integer, nullable=False, default=2)
     minutos_partido = Column(Integer, nullable=False, default=90)
     max_partidos = Column(Integer, nullable=False, default=30)
+
+    # Configuración de calendario automático
+    calendario_tipo = Column(String(20), nullable=True)  # 'ida' o 'ida_vuelta'
+    calendario_fecha_inicio = Column(String(10), nullable=True)  # formato YYYY-MM-DD
+    calendario_dias_partido = Column(Text, nullable=True)  # JSON: "[1,3,5]"
+    calendario_hora = Column(String(5), nullable=True)  # formato HH:MM
 
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends

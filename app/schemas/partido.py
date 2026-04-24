@@ -142,3 +142,48 @@ class CalendarCreateResponse(BaseModel):
     """
     mensaje: str
     partidos_creados: int
+
+
+class CalendarConfigResponse(BaseModel):
+    """
+    Schema de respuesta para configuración de calendario automático.
+    Usado en el endpoint GET /partidos/ligas/{liga_id}/config-calendario
+
+    Attributes:
+        tipo (str): Tipo de calendario - 'ida' o 'ida_vuelta'
+        fecha_inicio (str): Fecha de inicio en formato YYYY-MM-DD
+        dias_partido (list[int]): Días de la semana para los partidos (1=Lunes, 0=Domingo)
+        hora (str): Hora de los partidos en formato HH:MM
+    """
+    tipo: str
+    fecha_inicio: str
+    dias_partido: list[int]
+    hora: str
+
+
+class CalendarDeleteResponse(BaseModel):
+    """
+    Schema de respuesta tras eliminar calendario automático.
+
+    Attributes:
+        mensaje (str): Mensaje de confirmación
+        partidos_eliminados (int): Número de partidos eliminados
+        jornadas_eliminadas (int): Número de jornadas eliminadas
+    """
+    mensaje: str
+    partidos_eliminados: int
+    jornadas_eliminadas: int
+
+
+class CalendarUpdateResponse(BaseModel):
+    """
+    Schema de respuesta tras actualizar calendario automático.
+
+    Attributes:
+        mensaje (str): Mensaje de confirmación
+        partidos_creados (int): Número de partidos creados
+        partidos_eliminados (int): Número de partidos eliminados
+    """
+    mensaje: str
+    partidos_creados: int
+    partidos_eliminados: int
