@@ -3,7 +3,7 @@
 Modelo de Evento de Partido para registrar incidencias del juego.
 Almacena goles, tarjetas, cambios y otros eventos del partido.
 """
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from ..database.connection import Base
@@ -17,7 +17,7 @@ class EventoPartido(Base):
     - Goles
     - Tarjetas amarillas/rojas
     - Cambios de jugadores
-    - MVP (Jugador destacado)
+    - MVP (Jugador destacado del partido)
 
     Attributes:
         id_evento (int): Identificador único del evento (Primary Key)
@@ -25,6 +25,8 @@ class EventoPartido(Base):
         id_jugador (int): ID del jugador involucrado (Foreign Key)
         tipo_evento (str): Tipo de evento (ej: "Gol", "Tarjeta Amarilla", máx. 50 caracteres)
         minuto (int): Minuto del partido en que ocurrió el evento
+        puntuacion_mvp (float): Puntuación del MVP (0-10, solo para eventos tipo MVP)
+        incidencias (str): Notas o incidencias del partido (solo para eventos tipo MVP)
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización
         partido (Partido): Relación con el partido
@@ -42,6 +44,10 @@ class EventoPartido(Base):
     # Información del evento
     tipo_evento = Column(String(50), nullable=False)  # Ejemplo: "Gol", "Tarjeta Amarilla", "Tarjeta Roja", "Cambio", "MVP"
     minuto = Column(Integer, nullable=False)  # Minuto en que ocurrió (0-90+)
+
+    # Campos adicionales para MVP
+    puntuacion_mvp = Column(Float, nullable=True)  # Puntuación 0-10, solo para tipo_evento="mvp"
+    incidencias = Column(Text, nullable=True)  # Notas del partido, solo para tipo_evento="mvp"
 
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends

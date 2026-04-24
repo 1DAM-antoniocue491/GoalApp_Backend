@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Partido.
 Maneja operaciones CRUD de partidos, incluyendo gestión de equipos local y visitante,
 marcadores, fechas y estados del partido.
 """
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, aliased
 from sqlalchemy import func, and_
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -12,7 +12,11 @@ from app.models.partido import Partido
 from app.models.equipo import Equipo
 from app.models.jornada import Jornada
 from app.models.liga_configuracion import LigaConfiguracion
-from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest
+from app.models.convocatoria_partido import ConvocatoriaPartido
+from app.models.alineacion_partido import AlineacionPartido
+from app.models.jugador import Jugador
+from app.models.evento_partido import EventoPartido
+from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest, FinalizarPartidoRequest
 
 
 def crear_partido(db: Session, datos: PartidoCreate):
@@ -135,15 +139,16 @@ def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
     Returns:
         list: Lista de partidos con nombres y escudos de equipos
     """
-    EquipoVisitante = Equipo  # Alias para el equipo visitante
+    EquipoLocal = aliased(Equipo)
+    EquipoVisitante = aliased(Equipo)
 
     query = db.query(
         Partido,
-        Equipo.nombre.label("nombre_equipo_local"),
-        Equipo.escudo.label("escudo_equipo_local"),
+        EquipoLocal.nombre.label("nombre_equipo_local"),
+        EquipoLocal.escudo.label("escudo_equipo_local"),
         EquipoVisitante.nombre.label("nombre_equipo_visitante"),
         EquipoVisitante.escudo.label("escudo_equipo_visitante")
-    ).join(Equipo, Partido.id_equipo_local == Equipo.id_equipo)\
+    ).join(EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo)\
      .join(EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo)
 
     if liga_id is not None:
@@ -294,7 +299,7 @@ def obtener_partidos_en_vivo(db: Session):
             "estado": partido.estado,
             "nombre_equipo_local": equipo_local.nombre if equipo_local else "Unknown",
             "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
-            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_local else "Unknown",
+            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
             "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
         })
 
@@ -643,3 +648,117 @@ def actualizar_calendario(db: Session, liga_id: int, config: CalendarCreateReque
         "partidos_creados": resultado["partidos_creados"],
         "partidos_eliminados": partidos_programados
     }
+
+
+def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
+    """
+    Inicia un partido cambiando su estado a 'en_juego'.
+
+    Validaciones:
+    - Usuario es admin o delegado asignado al partido
+    - Partido está en estado 'programado'
+    - Fecha del partido >= hoy
+    - Ambos equipos tienen exactamente 11 titulares
+    - Ambos equipos tienen al menos 1 portero entre los titulares
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        partido_id (int): ID del partido a iniciar
+        usuario_id (int): ID del usuario que inicia el partido
+
+    Returns:
+        Partido: Objeto Partido actualizado
+
+    Raises:
+        ValueError: Si el partido no existe, no está en estado programado,
+                   o los equipos no tienen la alineación requerida
+    """
+    # Obtener partido con relaciones
+    partido = db.query(Partido).filter(Partido.id_partido == partido_id).first()
+    if not partido:
+        raise ValueError("Partido no encontrado")
+
+    # Validar estado
+    if partido.estado != "programado":
+        raise ValueError(f"El partido debe estar en estado 'programado', estado actual: {partido.estado}")
+
+    # Validar fecha (debe ser hoy o posterior)
+    hoy = datetime.now().date()
+    fecha_partido = partido.fecha.date()
+    if fecha_partido < hoy:
+        raise ValueError("No se puede iniciar un partido con fecha pasada")
+
+    # Validar alineación de ambos equipos
+    for id_equipo in [partido.id_equipo_local, partido.id_equipo_visitante]:
+        # Obtener titulares (11 jugadores)
+        titulares = db.query(AlineacionPartido).filter(
+            AlineacionPartido.id_partido == partido_id,
+            AlineacionPartido.id_equipo == id_equipo,
+            AlineacionPartido.titular == True
+        ).all()
+
+        if len(titulares) != 11:
+            raise ValueError(f"El equipo {id_equipo} debe tener exactamente 11 titulares, tiene {len(titulares)}")
+
+        # Validar al menos 1 portero entre los titulares
+        ids_jugadores = [a.id_jugador for a in titulares]
+        jugadores = db.query(Jugador).filter(
+            Jugador.id_jugador.in_(ids_jugadores),
+            Jugador.posicion.ilike("%portero%")
+        ).all()
+
+        if len(jugadores) < 1:
+            raise ValueError(f"El equipo {id_equipo} debe tener al menos 1 portero entre los titulares")
+
+    # Cambiar estado a 'en_juego'
+    partido.estado = "en_juego"
+    db.commit()
+    db.refresh(partido)
+
+    return partido
+
+
+def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoRequest, usuario_id: int):
+    """
+    Finaliza un partido registrando el resultado y el MVP.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        partido_id (int): ID del partido a finalizar
+        datos (FinalizarPartidoRequest): Datos del resultado y MVP
+        usuario_id (int): ID del usuario que finaliza el partido
+
+    Returns:
+        Partido: Objeto Partido actualizado
+
+    Raises:
+        ValueError: Si el partido no existe o no está en estado 'en_juego'
+    """
+    # Obtener partido
+    partido = db.query(Partido).filter(Partido.id_partido == partido_id).first()
+    if not partido:
+        raise ValueError("Partido no encontrado")
+
+    # Validar estado
+    if partido.estado != "en_juego":
+        raise ValueError(f"El partido debe estar 'en_juego' para finalizarlo, estado actual: {partido.estado}")
+
+    # Actualizar resultado
+    partido.goles_local = datos.goles_local
+    partido.goles_visitante = datos.goles_visitante
+    partido.estado = "finalizado"
+
+    # Crear evento MVP
+    mvp_evento = EventoPartido(
+        id_partido=partido_id,
+        id_jugador=datos.id_mvp,
+        tipo_evento="mvp",
+        minuto=90,  # MVP se registra al final del partido
+        puntuacion_mvp=datos.puntuacion_mvp,
+        incidencias=datos.incidencias
+    )
+    db.add(mvp_evento)
+    db.commit()
+    db.refresh(partido)
+
+    return partido

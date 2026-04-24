@@ -6,7 +6,7 @@ Endpoints para crear, listar, actualizar y eliminar partidos del sistema.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, require_role
+from app.api.dependencies import get_db, require_role, get_current_user
 from app.schemas.partido import (
     PartidoCreate,
     PartidoUpdate,
@@ -16,6 +16,7 @@ from app.schemas.partido import (
     CalendarConfigResponse,
     CalendarDeleteResponse,
     CalendarUpdateResponse,
+    FinalizarPartidoRequest,
 )
 from app.api.services.partido_service import (
     crear_partido,
@@ -31,6 +32,8 @@ from app.api.services.partido_service import (
     obtener_config_calendario,
     eliminar_calendario,
     actualizar_calendario,
+    iniciar_partido,
+    finalizar_partido,
 )
 
 # Configuración del router
@@ -342,3 +345,65 @@ def eliminar_partido_router(partido_id: int, db: Session = Depends(get_db)):
     """
     eliminar_partido(db, partido_id)
     return {"mensaje": "Partido eliminado correctamente"}
+
+
+@router.put("/{partido_id}/iniciar", response_model=PartidoResponse)
+def iniciar_partido_router(
+    partido_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Iniciar un partido (cambiar estado a 'en_juego').
+
+    Solo el administrador o el delegado asignado al partido pueden iniciarlo.
+    Valida que ambos equipos tengan 11 titulares y al menos 1 portero.
+
+    Parámetros:
+        - partido_id (int): ID del partido a iniciar (path parameter)
+        - db (Session): Sesión de base de datos
+        - current_user (Usuario): Usuario autenticado
+
+    Returns:
+        PartidoResponse: Información del partido actualizado
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin, Delegate
+    """
+    try:
+        partido = iniciar_partido(db, partido_id, current_user.id_usuario)
+        return partido
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/{partido_id}/finalizar", response_model=PartidoResponse)
+def finalizar_partido_router(
+    partido_id: int,
+    datos: FinalizarPartidoRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Finalizar un partido registrando resultado y MVP.
+
+    Solo el administrador o el delegado asignado al partido pueden finalizarlo.
+    Registra el resultado final y crea el evento MVP.
+
+    Parámetros:
+        - partido_id (int): ID del partido a finalizar (path parameter)
+        - datos (FinalizarPartidoRequest): Resultado y datos del MVP
+        - db (Session): Sesión de base de datos
+        - current_user (Usuario): Usuario autenticado
+
+    Returns:
+        PartidoResponse: Información del partido actualizado
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin, Delegate
+    """
+    try:
+        partido = finalizar_partido(db, partido_id, datos, current_user.id_usuario)
+        return partido
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

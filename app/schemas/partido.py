@@ -187,3 +187,22 @@ class CalendarUpdateResponse(BaseModel):
     mensaje: str
     partidos_creados: int
     partidos_eliminados: int
+
+
+class FinalizarPartidoRequest(BaseModel):
+    """
+    Schema para finalizar un partido.
+    Usado en el endpoint PUT /partidos/{id}/finalizar
+
+    Attributes:
+        goles_local (int): Goles finales del equipo local
+        goles_visitante (int): Goles finales del equipo visitante
+        id_mvp (int): ID del jugador MVP del partido
+        puntuacion_mvp (float): Puntuación del MVP (0-10)
+        incidencias (str | None): Notas o incidencias opcionales del partido
+    """
+    goles_local: int = Field(..., ge=0)
+    goles_visitante: int = Field(..., ge=0)
+    id_mvp: int
+    puntuacion_mvp: float = Field(..., ge=0, le=10)
+    incidencias: str | None = None
