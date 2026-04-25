@@ -327,6 +327,8 @@ def notificacion_ejemplo(db, usuario_ejemplo):
     """Crea una notificacion de prueba."""
     notificacion = Notificacion(
         id_usuario=usuario_ejemplo.id_usuario,
+        tipo="sistema",
+        titulo="Notificación de prueba",
         mensaje="Notificacion de prueba",
         leida=False
     )

@@ -22,8 +22,12 @@ class Notificacion(Base):
     Attributes:
         id_notificacion (int): Identificador único de la notificación (Primary Key)
         id_usuario (int): ID del usuario destinatario (Foreign Key)
+        tipo (str): Tipo de notificación (partido_finalizado, convocatoria, etc.)
+        titulo (str): Título corto de la notificación
         mensaje (text): Contenido del mensaje de notificación
         leida (bool): Si el usuario ha leído la notificación (default: False)
+        id_referencia (int | None): ID del partido/liga/equipo relacionado
+        tipo_referencia (str | None): Tipo de referencia ("partido", "liga", "equipo")
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización
         usuario (Usuario): Relación con el usuario destinatario
@@ -37,8 +41,12 @@ class Notificacion(Base):
     id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False)
 
     # Información de la notificación
+    tipo = Column(String(50), nullable=False)  # Tipo: partido_finalizado, convocatoria, etc.
+    titulo = Column(String(100), nullable=False)  # Título corto para UI
     mensaje = Column(Text, nullable=False)  # Contenido del mensaje (puede ser largo)
     leida = Column(Boolean, nullable=False, default=False)  # Estado de lectura
+    id_referencia = Column(Integer, nullable=True)  # ID del partido/liga/equipo relacionado
+    tipo_referencia = Column(String(50), nullable=True)  # "partido", "liga", "equipo"
 
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends

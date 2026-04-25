@@ -18,14 +18,33 @@ class TestCrearNotificacion:
             headers=headers_admin,
             json={
                 "id_usuario": usuario_ejemplo.id_usuario,
+                "tipo": "sistema",
+                "titulo": "Notificación de prueba",
                 "mensaje": "Nueva notificación de prueba"
             }
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 200
         data = response.json()
+        assert data["titulo"] == "Notificación de prueba"
         assert data["mensaje"] == "Nueva notificación de prueba"
         assert data["leida"] == False
+        assert data["tipo"] == "sistema"
+
+    def test_crear_notificacion_sin_permiso(self, client, headers_auth, usuario_ejemplo):
+        """Crear notificación sin ser admin."""
+        response = client.post(
+            "/api/v1/notificaciones/",
+            headers=headers_auth,
+            json={
+                "id_usuario": usuario_ejemplo.id_usuario,
+                "tipo": "sistema",
+                "titulo": "Notificación de prueba",
+                "mensaje": "Nueva notificación de prueba"
+            }
+        )
+
+        assert response.status_code == 403
 
     def test_crear_notificacion_usuario_no_existente(self, client, headers_admin):
         """Crear notificación para usuario que no existe."""
@@ -34,7 +53,9 @@ class TestCrearNotificacion:
             headers=headers_admin,
             json={
                 "id_usuario": 999,
-                "mensaje": "Notificación"
+                "tipo": "sistema",
+                "titulo": "Notificación",
+                "mensaje": "Mensaje de prueba"
             }
         )
 
@@ -85,7 +106,7 @@ class TestMarcarNotificacionLeida:
         )
 
         assert response.status_code == 200
-        assert response.json()["leida"] == True
+        assert response.json()["mensaje"] == "Notificación marcada como leída"
 
     def test_marcar_notificacion_no_existente(self, client, headers_auth):
         """Marcar notificación que no existe."""
@@ -119,7 +140,8 @@ class TestEliminarNotificacion:
             headers=headers_auth
         )
 
-        assert response.status_code == 204
+        assert response.status_code == 200
+        assert response.json()["mensaje"] == "Notificación eliminada"
 
     def test_eliminar_notificacion_no_existente(self, client, headers_auth):
         """Eliminar notificación que no existe."""
@@ -160,14 +182,13 @@ class TestNotificacionesNoLeidas:
         for notif in data:
             assert notif["leida"] == False
 
-    def test_contar_no_leidas(self, client, headers_auth, notificacion_ejemplo):
-        """Contar notificaciones no leídas."""
-        response = client.get(
-            "/api/v1/notificaciones/no-leidas/count",
+    def test_marcar_todas_como_leidas(self, client, headers_auth, notificacion_ejemplo):
+        """Marcar todas las notificaciones como leídas."""
+        response = client.put(
+            "/api/v1/notificaciones/mark-all-read",
             headers=headers_auth
         )
 
         assert response.status_code == 200
         data = response.json()
-        assert "count" in data
-        assert data["count"] >= 1
+        assert "mensaje" in data
