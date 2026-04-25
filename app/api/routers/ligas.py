@@ -17,8 +17,19 @@ from app.api.services.liga_service import (
     eliminar_liga,
     obtener_clasificacion,
     reactivar_liga,
-    desactivar_liga
+    desactivar_liga,
+    obtener_usuarios_liga,
+    actualizar_rol_usuario,
+    actualizar_estado_usuario,
+    eliminar_usuario_liga
 )
+from app.schemas.gestion_usuarios import UsuarioRolUpdate, UsuarioEstadoUpdate, UsuarioLigaResponse
+from app.models.usuario import Usuario
+from app.models.rol import Rol
+from app.models.usuario_rol import UsuarioRol
+from app.models.equipo import Equipo
+from app.models.jugador import Jugador
+from sqlalchemy import func
 
 # Configuración del router
 router = APIRouter(
@@ -223,5 +234,139 @@ def desactivar_liga_router(liga_id: int, db: Session = Depends(get_db)):
         return desactivar_liga(db, liga_id)
     except ValueError as e:
         if "no encontrada" in str(e):
+            raise HTTPException(404, str(e))
+        raise HTTPException(400, str(e))
+
+
+@router.get("/{liga_id}/usuarios", response_model=list[UsuarioLigaResponse])
+def listar_usuarios_liga(liga_id: int, db: Session = Depends(get_db)):
+    """
+    Listar todos los usuarios de una liga con sus roles y estados.
+
+    Obtiene la lista completa de usuarios que pertenecen a una liga,
+    incluyendo su rol actual y estado (activo/pendiente).
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        List[UsuarioLigaResponse]: Lista de usuarios con su información de rol
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_usuarios_liga(db, liga_id)
+
+
+@router.put("/{liga_id}/usuarios/{usuario_id}/rol", response_model=UsuarioLigaResponse, dependencies=[Depends(require_role("admin"))])
+def actualizar_rol_usuario_router(
+    liga_id: int,
+    usuario_id: int,
+    datos: UsuarioRolUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualizar el rol de un usuario en una liga.
+
+    Permite cambiar el rol de un usuario dentro de una liga específica.
+    Por ejemplo, cambiar de 'observador' a 'entrenador'.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - usuario_id (int): ID del usuario a actualizar (path parameter)
+        - datos (UsuarioRolUpdate): Datos con el nuevo rol
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        UsuarioLigaResponse: Información actualizada del usuario
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 404: Si la liga, usuario o rol no existen
+        HTTPException 400: Si el usuario no pertenece a la liga o no tiene equipo (para rol entrenador)
+    """
+    try:
+        return actualizar_rol_usuario(db, liga_id, usuario_id, datos)
+    except ValueError as e:
+        if "no encontrada" in str(e) or "no encontrado" in str(e):
+            raise HTTPException(404, str(e))
+        raise HTTPException(400, str(e))
+
+
+@router.put("/{liga_id}/usuarios/{usuario_id}/estado", response_model=UsuarioLigaResponse, dependencies=[Depends(require_role("admin"))])
+def actualizar_estado_usuario_router(
+    liga_id: int,
+    usuario_id: int,
+    datos: UsuarioEstadoUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualizar el estado de un usuario en una liga.
+
+    Permite activar o desactivar (marcar como pendiente) un usuario en una liga.
+    Útil para gestionar el estado de miembros sin eliminarlos permanentemente.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - usuario_id (int): ID del usuario a actualizar (path parameter)
+        - datos (UsuarioEstadoUpdate): Datos con el nuevo estado (activo=True/False)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        UsuarioLigaResponse: Información actualizada del usuario
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 404: Si la liga o usuario no existen
+        HTTPException 400: Si el usuario no pertenece a la liga
+    """
+    try:
+        return actualizar_estado_usuario(db, liga_id, usuario_id, datos)
+    except ValueError as e:
+        if "no encontrada" in str(e) or "no encontrado" in str(e):
+            raise HTTPException(404, str(e))
+        raise HTTPException(400, str(e))
+
+
+@router.delete("/{liga_id}/usuarios/{usuario_id}", dependencies=[Depends(require_role("admin"))])
+def eliminar_usuario_liga_router(
+    liga_id: int,
+    usuario_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Eliminar un usuario de una liga.
+
+    Elimina permanentemente la asignación de un usuario a una liga.
+    Esta acción no se puede deshacer.
+
+    Validaciones:
+    - No se puede eliminar al único administrador de la liga
+    - El usuario debe pertenecer a la liga
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - usuario_id (int): ID del usuario a eliminar (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 404: Si la liga o usuario no existen
+        HTTPException 400: Si el usuario no pertenece a la liga o es el único admin
+    """
+    try:
+        return eliminar_usuario_liga(db, liga_id, usuario_id)
+    except ValueError as e:
+        if "no encontrada" in str(e) or "no encontrado" in str(e):
             raise HTTPException(404, str(e))
         raise HTTPException(400, str(e))

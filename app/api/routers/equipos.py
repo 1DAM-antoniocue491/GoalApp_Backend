@@ -21,7 +21,11 @@ from app.api.services.equipo_service import (
     obtener_ultimos_partidos,
     obtener_goleadores_equipo,
     obtener_plantilla_equipo,
-    obtener_staff_equipo
+    obtener_staff_equipo,
+    obtener_miembros_equipo,
+    asignar_delegado,
+    actualizar_estado_miembro,
+    eliminar_miembro_equipo
 )
 
 # Configuración del router
@@ -356,3 +360,158 @@ def obtener_mi_equipo(
         }
 
     raise HTTPException(404, "Usuario no tiene equipo en esta liga")
+
+
+@router.get("/{equipo_id}/miembros")
+def obtener_miembros_equipo_router(
+    equipo_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Obtener todos los miembros de un equipo (jugadores + delegado).
+
+    Solo el entrenador del equipo puede acceder a esta información.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        list: Lista de miembros con su información (nombre, email, tipo, estado)
+
+    Requiere autenticación: Sí
+    Roles permitidos: Entrenador del equipo
+
+    Raises:
+        HTTPException 403: Si el usuario no es el entrenador del equipo
+        HTTPException 404: Si el equipo no existe
+    """
+    from app.models.equipo import Equipo
+
+    equipo = db.query(Equipo).filter(Equipo.id_equipo == equipo_id).first()
+    if not equipo:
+        raise HTTPException(404, "Equipo no encontrado")
+
+    # Verificar que el usuario es el entrenador
+    if equipo.id_entrenador != current_user.id_usuario:
+        raise HTTPException(403, "Solo el entrenador puede ver los miembros de su equipo")
+
+    return obtener_miembros_equipo(db, equipo_id)
+
+
+@router.put("/{equipo_id}/delegado")
+def asignar_delegado_router(
+    equipo_id: int,
+    datos: dict,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Asignar o cambiar el delegado de un equipo.
+
+    Solo el entrenador del equipo puede realizar esta acción.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - datos (dict): {"id_usuario": int} - ID del usuario a asignar como delegado
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: Información del delegado asignado
+
+    Requiere autenticación: Sí
+    Roles permitidos: Entrenador del equipo
+
+    Raises:
+        HTTPException 403: Si el usuario no es el entrenador
+        HTTPException 404: Si el equipo o usuario no existen
+    """
+    try:
+        id_usuario = datos.get("id_usuario")
+        if not id_usuario:
+            raise HTTPException(400, "id_usuario es requerido")
+        return asignar_delegado(db, equipo_id, id_usuario, current_user.id_usuario)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.put("/{equipo_id}/miembros/{usuario_id}/estado")
+def actualizar_estado_miembro_router(
+    equipo_id: int,
+    usuario_id: int,
+    datos: dict,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Actualizar el estado (activo/inactivo) de un miembro del equipo.
+
+    Solo el entrenador puede realizar esta acción.
+    No se puede desactivar al propio entrenador.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - usuario_id (int): ID del usuario miembro (path parameter)
+        - datos (dict): {"activo": bool} - Nuevo estado
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: Información del miembro actualizado
+
+    Requiere autenticación: Sí
+    Roles permitidos: Entrenador del equipo
+
+    Raises:
+        HTTPException 403: Si el usuario no es el entrenador
+        HTTPException 404: Si el equipo o miembro no existen
+    """
+    try:
+        activo = datos.get("activo", True)
+        return actualizar_estado_miembro(db, equipo_id, usuario_id, activo, current_user.id_usuario)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.delete("/{equipo_id}/miembros/{usuario_id}")
+def eliminar_miembro_equipo_router(
+    equipo_id: int,
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Eliminar un miembro del equipo (jugador o delegado).
+
+    Solo el entrenador puede realizar esta acción.
+    No se puede eliminar al propio entrenador.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - usuario_id (int): ID del usuario miembro (path parameter)
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    Roles permitidos: Entrenador del equipo
+
+    Raises:
+        HTTPException 403: Si el usuario no es el entrenador
+        HTTPException 404: Si el equipo o miembro no existen
+    """
+    try:
+        return eliminar_miembro_equipo(db, equipo_id, usuario_id, current_user.id_usuario)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))

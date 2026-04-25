@@ -13,8 +13,10 @@ from app.models.equipo import Equipo
 from app.models.partido import Partido
 from app.models.rol import Rol
 from app.models.usuario_rol import UsuarioRol
+from app.models.usuario import Usuario
 from app.schemas.liga import LigaCreate, LigaUpdate
 from app.schemas.clasificacion import ClasificacionItem
+from app.schemas.gestion_usuarios import UsuarioRolUpdate, UsuarioEstadoUpdate, UsuarioLigaResponse
 
 
 def _refresh_liga(db: Session, liga_id: int) -> Liga:
@@ -398,3 +400,226 @@ def obtener_clasificacion(db: Session, liga_id: int) -> List[ClasificacionItem]:
         ))
 
     return resultado
+
+
+def obtener_usuarios_liga(db: Session, liga_id: int) -> list[UsuarioLigaResponse]:
+    """
+    Obtiene todos los usuarios de una liga con su rol y estado.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+
+    Returns:
+        list[UsuarioLigaResponse]: Lista de usuarios con su información de rol
+
+    Raises:
+        ValueError: Si la liga no existe
+    """
+    liga = obtener_liga_por_id(db, liga_id)
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    usuarios_roles = db.query(UsuarioRol).join(Usuario).join(Rol).filter(
+        UsuarioRol.id_liga == liga_id
+    ).all()
+
+    resultado = []
+    for ur in usuarios_roles:
+        resultado.append(UsuarioLigaResponse(
+            id_usuario_rol=ur.id_usuario_rol,
+            id_usuario=ur.id_usuario,
+            nombre_usuario=ur.usuario.nombre_usuario,
+            email=ur.usuario.email,
+            id_rol=ur.id_rol,
+            nombre_rol=ur.rol.nombre,
+            activo=bool(ur.activo)
+        ))
+    return resultado
+
+
+def actualizar_rol_usuario(db: Session, liga_id: int, usuario_id: int, datos: UsuarioRolUpdate) -> UsuarioLigaResponse:
+    """
+    Actualiza el rol de un usuario en una liga específica.
+
+    Validaciones:
+    - El usuario debe pertenecer a la liga
+    - El rol debe existir
+    - Si el nuevo rol es 'entrenador', el usuario debe tener un equipo asignado o asignarlo
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+        usuario_id (int): ID del usuario
+        datos (UsuarioRolUpdate): Datos con el nuevo rol
+
+    Returns:
+        UsuarioLigaResponse: Información actualizada del usuario
+
+    Raises:
+        ValueError: Si la liga, usuario o rol no existen
+    """
+    # Verificar que la liga existe
+    liga = obtener_liga_por_id(db, liga_id)
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    # Verificar que el usuario existe
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    if not usuario:
+        raise ValueError("Usuario no encontrado")
+
+    # Verificar que el rol existe
+    rol = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+    if not rol:
+        raise ValueError("Rol no encontrado")
+
+    # Buscar la asignación usuario-rol-liga
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise ValueError("El usuario no pertenece a esta liga")
+
+    # Si el nuevo rol es 'entrenador', verificar que tenga equipo
+    if rol.nombre == 'entrenador':
+        equipo = db.query(Equipo).filter(
+            Equipo.id_liga == liga_id,
+            Equipo.id_entrenador == usuario_id
+        ).first()
+        if not equipo:
+            raise ValueError("El usuario debe tener un equipo asignado para ser entrenador")
+
+    # Actualizar el rol
+    asignacion.id_rol = datos.id_rol
+    db.commit()
+
+    # Recargar y retornar
+    asignacion_actualizada = db.query(UsuarioRol).join(Usuario).join(Rol).filter(
+        UsuarioRol.id_usuario_rol == asignacion.id_usuario_rol
+    ).first()
+
+    return UsuarioLigaResponse(
+        id_usuario_rol=asignacion_actualizada.id_usuario_rol,
+        id_usuario=asignacion_actualizada.id_usuario,
+        nombre_usuario=asignacion_actualizada.usuario.nombre_usuario,
+        email=asignacion_actualizada.usuario.email,
+        id_rol=asignacion_actualizada.id_rol,
+        nombre_rol=asignacion_actualizada.rol.nombre,
+        activo=bool(asignacion_actualizada.activo)
+    )
+
+
+def actualizar_estado_usuario(db: Session, liga_id: int, usuario_id: int, datos: UsuarioEstadoUpdate) -> UsuarioLigaResponse:
+    """
+    Actualiza el estado (activo/pendiente) de un usuario en una liga.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+        usuario_id (int): ID del usuario
+        datos (UsuarioEstadoUpdate): Datos con el nuevo estado
+
+    Returns:
+        UsuarioLigaResponse: Información actualizada del usuario
+
+    Raises:
+        ValueError: Si la liga o usuario no existen, o el usuario no pertenece a la liga
+    """
+    # Verificar que la liga existe
+    liga = obtener_liga_por_id(db, liga_id)
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    # Verificar que el usuario existe
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    if not usuario:
+        raise ValueError("Usuario no encontrado")
+
+    # Buscar la asignación usuario-rol-liga
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise ValueError("El usuario no pertenece a esta liga")
+
+    # Actualizar el estado
+    asignacion.activo = 1 if datos.activo else 0
+    db.commit()
+
+    # Recargar y retornar
+    asignacion_actualizada = db.query(UsuarioRol).join(Usuario).join(Rol).filter(
+        UsuarioRol.id_usuario_rol == asignacion.id_usuario_rol
+    ).first()
+
+    return UsuarioLigaResponse(
+        id_usuario_rol=asignacion_actualizada.id_usuario_rol,
+        id_usuario=asignacion_actualizada.id_usuario,
+        nombre_usuario=asignacion_actualizada.usuario.nombre_usuario,
+        email=asignacion_actualizada.usuario.email,
+        id_rol=asignacion_actualizada.id_rol,
+        nombre_rol=asignacion_actualizada.rol.nombre,
+        activo=bool(asignacion_actualizada.activo)
+    )
+
+
+def eliminar_usuario_liga(db: Session, liga_id: int, usuario_id: int) -> dict:
+    """
+    Elimina un usuario de una liga.
+
+    Validaciones:
+    - No se puede eliminar al único administrador de la liga
+    - El usuario debe pertenecer a la liga
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+        usuario_id (int): ID del usuario
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Raises:
+        ValueError: Si la liga o usuario no existen, el usuario no pertenece a la liga,
+                   o es el único admin
+    """
+    # Verificar que la liga existe
+    liga = obtener_liga_por_id(db, liga_id)
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    # Verificar que el usuario existe
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    if not usuario:
+        raise ValueError("Usuario no encontrado")
+
+    # Buscar la asignación usuario-rol-liga
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise ValueError("El usuario no pertenece a esta liga")
+
+    # Verificar que no sea el único admin
+    rol_admin = db.query(Rol).filter(Rol.nombre == "admin").first()
+    if rol_admin and asignacion.id_rol == rol_admin.id_rol:
+        # Contar cuántos admins hay en la liga
+        total_admins = db.query(UsuarioRol).filter(
+            UsuarioRol.id_liga == liga_id,
+            UsuarioRol.id_rol == rol_admin.id_rol
+        ).count()
+
+        if total_admins <= 1:
+            raise ValueError("No se puede eliminar al único administrador de la liga")
+
+    # Eliminar la asignación
+    db.delete(asignacion)
+    db.commit()
+
+    return {"mensaje": f"Usuario {usuario.nombre_usuario} eliminado de la liga {liga.nombre}"}

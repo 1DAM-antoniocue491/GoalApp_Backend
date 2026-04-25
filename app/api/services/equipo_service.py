@@ -567,3 +567,208 @@ def obtener_staff_equipo(db: Session, equipo_id: int):
         "entrenador": entrenador,
         "capitan": capitan,
     }
+
+
+def obtener_miembros_equipo(db: Session, equipo_id: int) -> list:
+    """
+    Obtiene todos los miembros de un equipo (jugadores + delegado).
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        equipo_id (int): ID del equipo
+
+    Returns:
+        list: Lista de miembros con su información y tipo (jugador/delegado)
+    """
+    equipo = obtener_equipo_por_id(db, equipo_id)
+    if not equipo:
+        return []
+
+    miembros = []
+
+    # Obtener delegado (si existe y es diferente del entrenador)
+    if equipo.id_delegado and equipo.id_delegado != equipo.id_entrenador:
+        delegado = db.query(Usuario).filter(Usuario.id_usuario == equipo.id_delegado).first()
+        if delegado:
+            miembros.append({
+                "id_miembro": equipo.id_delegado,
+                "id_usuario": equipo.id_delegado,
+                "tipo": "delegado",
+                "nombre": delegado.nombre,
+                "email": delegado.email,
+                "activo": True,  # El delegado siempre está activo si está asignado
+            })
+
+    # Obtener jugadores
+    jugadores = db.query(Jugador, Usuario).join(
+        Usuario, Jugador.id_usuario == Usuario.id_usuario
+    ).filter(
+        Jugador.id_equipo == equipo_id
+    ).all()
+
+    for jugador, usuario in jugadores:
+        miembros.append({
+            "id_miembro": jugador.id_jugador,
+            "id_usuario": jugador.id_usuario,
+            "tipo": "jugador",
+            "nombre": usuario.nombre,
+            "email": usuario.email,
+            "activo": jugador.activo,
+            "posicion": jugador.posicion,
+            "dorsal": jugador.dorsal,
+        })
+
+    return miembros
+
+
+def asignar_delegado(db: Session, equipo_id: int, id_usuario: int, id_entrenador: int) -> dict:
+    """
+    Asigna o cambia el delegado de un equipo.
+
+    Solo el entrenador del equipo puede realizar esta acción.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        equipo_id (int): ID del equipo
+        id_usuario (int): ID del usuario a asignar como delegado
+        id_entrenador (int): ID del entrenador que realiza la acción
+
+    Returns:
+        dict: Información del delegado asignado
+
+    Raises:
+        ValueError: Si el equipo no existe o el usuario no es el entrenador
+        PermissionError: Si el usuario no es el entrenador del equipo
+    """
+    equipo = obtener_equipo_por_id(db, equipo_id)
+    if not equipo:
+        raise ValueError("Equipo no encontrado")
+
+    # Verificar que el usuario que realiza la acción es el entrenador
+    if equipo.id_entrenador != id_entrenador:
+        raise PermissionError("Solo el entrenador puede asignar un delegado")
+
+    # Verificar que el usuario existe
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == id_usuario).first()
+    if not usuario:
+        raise ValueError("Usuario no encontrado")
+
+    # Asignar nuevo delegado
+    equipo.id_delegado = id_usuario
+    db.commit()
+    db.refresh(equipo)
+
+    return {
+        "id_usuario": usuario.id_usuario,
+        "nombre": usuario.nombre,
+        "email": usuario.email,
+    }
+
+
+def actualizar_estado_miembro(db: Session, equipo_id: int, id_usuario: int, activo: bool, id_entrenador: int) -> dict:
+    """
+    Actualiza el estado (activo/inactivo) de un miembro del equipo.
+
+    Solo el entrenador puede realizar esta acción.
+    No se puede desactivar al propio entrenador.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        equipo_id (int): ID del equipo
+        id_usuario (int): ID del usuario miembro
+        activo (bool): Nuevo estado
+        id_entrenador (int): ID del entrenador que realiza la acción
+
+    Returns:
+        dict: Información del miembro actualizado
+
+    Raises:
+        ValueError: Si el equipo o miembro no existen
+        PermissionError: Si el usuario no es el entrenador o intenta desactivarse a sí mismo
+    """
+    equipo = obtener_equipo_por_id(db, equipo_id)
+    if not equipo:
+        raise ValueError("Equipo no encontrado")
+
+    # Verificar que el usuario que realiza la acción es el entrenador
+    if equipo.id_entrenador != id_entrenador:
+        raise PermissionError("Solo el entrenador puede gestionar los miembros de su equipo")
+
+    # No se puede desactivar el propio entrenador
+    if id_usuario == equipo.id_entrenador:
+        raise PermissionError("No puedes desactivarte a ti mismo como entrenador")
+
+    # Si es el delegado, no se puede desactivar (se elimina en su lugar)
+    if equipo.id_delegado == id_usuario:
+        raise ValueError("Para quitar al delegado, usa el endpoint de eliminar delegado")
+
+    # Buscar el jugador
+    jugador = db.query(Jugador).filter(
+        Jugador.id_equipo == equipo_id,
+        Jugador.id_usuario == id_usuario
+    ).first()
+
+    if not jugador:
+        raise ValueError("El usuario no es miembro de este equipo")
+
+    jugador.activo = activo
+    db.commit()
+
+    return {
+        "id_usuario": jugador.id_usuario,
+        "nombre": db.query(Usuario).filter(Usuario.id_usuario == jugador.id_usuario).first().nombre,
+        "activo": jugador.activo,
+    }
+
+
+def eliminar_miembro_equipo(db: Session, equipo_id: int, id_usuario: int, id_entrenador: int) -> dict:
+    """
+    Elimina un miembro del equipo (jugador o delegado).
+
+    Solo el entrenador puede realizar esta acción.
+    No se puede eliminar al propio entrenador.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        equipo_id (int): ID del equipo
+        id_usuario (int): ID del usuario miembro a eliminar
+        id_entrenador (int): ID del entrenador que realiza la acción
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Raises:
+        ValueError: Si el equipo o miembro no existen
+        PermissionError: Si el usuario no es el entrenador o intenta eliminarse a sí mismo
+    """
+    equipo = obtener_equipo_por_id(db, equipo_id)
+    if not equipo:
+        raise ValueError("Equipo no encontrado")
+
+    # Verificar que el usuario que realiza la acción es el entrenador
+    if equipo.id_entrenador != id_entrenador:
+        raise PermissionError("Solo el entrenador puede gestionar los miembros de su equipo")
+
+    # No se puede eliminar el propio entrenador
+    if id_usuario == equipo.id_entrenador:
+        raise PermissionError("No puedes eliminarte a ti mismo como entrenador")
+
+    # Si es el delegado, quitar el delegado del equipo
+    if equipo.id_delegado == id_usuario:
+        equipo.id_delegado = None
+        db.commit()
+        return {"mensaje": "Delegado eliminado del equipo correctamente"}
+
+    # Si es un jugador, eliminar de la tabla jugadores
+    jugador = db.query(Jugador).filter(
+        Jugador.id_equipo == equipo_id,
+        Jugador.id_usuario == id_usuario
+    ).first()
+
+    if not jugador:
+        raise ValueError("El usuario no es miembro de este equipo")
+
+    db.delete(jugador)
+    db.commit()
+
+    return {"mensaje": "Jugador eliminado del equipo correctamente"}
