@@ -3,7 +3,7 @@
 Servicios de lógica de negocio para ConvocatoriaPartido.
 Maneja operaciones CRUD de convocatorias de jugadores para partidos.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
 from typing import List
 
@@ -86,8 +86,12 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
     if not partido:
         raise ValueError("Partido no encontrado")
 
-    # Obtener convocatorias
-    convocatorias = db.query(ConvocatoriaPartido).filter(
+    # Obtener convocatorias con jugadores y usuarios cargados
+    convocatorias = db.query(ConvocatoriaPartido).join(
+        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
+    ).join(
+        Jugador.usuario
+    ).filter(
         ConvocatoriaPartido.id_partido == id_partido
     ).all()
 
@@ -96,7 +100,7 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
     suplentes = []
 
     for conv in convocatorias:
-        jugador = db.query(Jugador).filter(Jugador.id_jugador == conv.id_jugador).first()
+        jugador = conv.jugador  # Ya cargado por el join
         if jugador:
             jugador_response = JugadorConvocadoResponse(
                 id_jugador=jugador.id_jugador,
@@ -143,8 +147,12 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
     if partido.id_equipo_local != id_equipo and partido.id_equipo_visitante != id_equipo:
         raise ValueError("El equipo no participa en este partido")
 
-    # Obtener jugadores del equipo convocados
-    convocatorias = db.query(ConvocatoriaPartido).join(Jugador).filter(
+    # Obtener jugadores del equipo convocados con usuario cargado
+    convocatorias = db.query(ConvocatoriaPartido).join(
+        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
+    ).join(
+        Jugador.usuario
+    ).filter(
         and_(
             ConvocatoriaPartido.id_partido == id_partido,
             Jugador.id_equipo == id_equipo
@@ -156,7 +164,7 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
     suplentes = []
 
     for conv in convocatorias:
-        jugador = db.query(Jugador).filter(Jugador.id_jugador == conv.id_jugador).first()
+        jugador = conv.jugador  # Ya cargado por el join
         if jugador:
             jugador_response = JugadorConvocadoResponse(
                 id_jugador=jugador.id_jugador,
