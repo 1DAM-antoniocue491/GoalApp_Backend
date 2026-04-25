@@ -17,7 +17,8 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
     """
     Crea una convocatoria para un partido.
 
-    Elimina cualquier convocatoria existente y crea una nueva con los jugadores proporcionados.
+    Elimina las convocatorias existentes de los jugadores proporcionados y crea nuevas.
+    Permite tener convocatorias de múltiples equipos en el mismo partido.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
@@ -38,14 +39,16 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
     if partido.estado in ["En Juego", "Finalizado"]:
         raise ValueError(f"No se puede modificar convocatoria de partido {partido.estado.lower()}")
 
-    # Contar titulares
+    # Contar titulares (máximo 11 por equipo)
     titulares = sum(1 for j in datos.jugadores if j.es_titular)
     if titulares > 11:
-        raise ValueError("No puede haber más de 11 titulares")
+        raise ValueError("No puede haber más de 11 titulares por equipo")
 
-    # Eliminar convocatoria existente
+    # Eliminar solo las convocatorias existentes de los jugadores proporcionados
+    ids_jugadores = [j.id_jugador for j in datos.jugadores]
     db.query(ConvocatoriaPartido).filter(
-        ConvocatoriaPartido.id_partido == datos.id_partido
+        ConvocatoriaPartido.id_partido == datos.id_partido,
+        ConvocatoriaPartido.id_jugador.in_(ids_jugadores)
     ).delete()
 
     # Crear nueva convocatoria
