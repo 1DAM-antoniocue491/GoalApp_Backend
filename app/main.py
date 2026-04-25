@@ -119,45 +119,20 @@ app = FastAPI(
 # ============================================================
 # MIDDLEWARE DE CORS
 # ============================================================
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.datastructures import MutableHeaders
-
-
-class CustomCORSMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware CORS que permite cualquier origen.
-
-    Devuelve el origen de la petición en Access-Control-Allow-Origin
-    para ser compatible con credenciales (cookies, Authorization header).
-    """
-
-    async def dispatch(self, request: Request, call_next):
-        origin = request.headers.get("origin", "")
-
-        # Para preflight requests (OPTIONS)
-        if request.method == "OPTIONS":
-            response = Response()
-            response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
-            response.headers["Access-Control-Max-Age"] = "86400"  # 24 horas
-            return response
-
-        # Para requests normales
-        response = await call_next(request)
-
-        # Siempre añadir headers CORS
-        response.headers["Access-Control-Allow-Origin"] = origin if origin else "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
-
-        return response
-
-app.add_middleware(CustomCORSMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "https://goalapp-backend-j2cx.onrender.com",
+        "*",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ============================================================
