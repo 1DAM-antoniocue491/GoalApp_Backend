@@ -2,7 +2,7 @@
 Schemas de validación para el recurso Partido.
 Define los modelos Pydantic para request/response de la API relacionados con partidos de fútbol.
 """
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from enum import Enum
 
