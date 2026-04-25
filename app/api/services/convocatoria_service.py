@@ -86,11 +86,11 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
     if not partido:
         raise ValueError("Partido no encontrado")
 
-    # Obtener convocatorias con jugadores y usuarios cargados
-    convocatorias = db.query(ConvocatoriaPartido).join(
-        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
-    ).join(
-        Jugador.usuario
+    # Obtener convocatorias con jugadores y usuarios cargados (usar joinedload para evitar lazy='raise')
+    from sqlalchemy.orm import joinedload
+
+    convocatorias = db.query(ConvocatoriaPartido).options(
+        joinedload(ConvocatoriaPartido.jugador).joinedload(Jugador.usuario)
     ).filter(
         ConvocatoriaPartido.id_partido == id_partido
     ).all()
@@ -100,7 +100,8 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
     suplentes = []
 
     for conv in convocatorias:
-        jugador = conv.jugador  # Ya cargado por el join
+        # Ahora conv.jugador está cargado gracias a joinedload
+        jugador = conv.jugador
         if jugador:
             jugador_response = JugadorConvocadoResponse(
                 id_jugador=jugador.id_jugador,
@@ -137,6 +138,7 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
         ValueError: Si el partido o equipo no existe
     """
     from app.models.equipo import Equipo
+    from app.models.usuario import Usuario
 
     # Verificar que el partido existe
     partido = db.query(Partido).filter(Partido.id_partido == id_partido).first()
@@ -147,11 +149,13 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
     if partido.id_equipo_local != id_equipo and partido.id_equipo_visitante != id_equipo:
         raise ValueError("El equipo no participa en este partido")
 
-    # Obtener jugadores del equipo convocados con usuario cargado
-    convocatorias = db.query(ConvocatoriaPartido).join(
-        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
+    # Obtener convocatorias con joinedload para evitar lazy='raise'
+    from sqlalchemy.orm import joinedload
+
+    convocatorias = db.query(ConvocatoriaPartido).options(
+        joinedload(ConvocatoriaPartido.jugador).joinedload(Jugador.usuario)
     ).join(
-        Jugador.usuario
+        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
     ).filter(
         and_(
             ConvocatoriaPartido.id_partido == id_partido,
@@ -164,7 +168,7 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
     suplentes = []
 
     for conv in convocatorias:
-        jugador = conv.jugador  # Ya cargado por el join
+        jugador = conv.jugador
         if jugador:
             jugador_response = JugadorConvocadoResponse(
                 id_jugador=jugador.id_jugador,
