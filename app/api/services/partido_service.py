@@ -690,10 +690,13 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
 
     # Validar alineación de ambos equipos
     for id_equipo in [partido.id_equipo_local, partido.id_equipo_visitante]:
-        # Obtener titulares (11 jugadores)
-        titulares = db.query(AlineacionPartido).filter(
+        # Obtener titulares (11 jugadores) - hacer join con Jugador para filtrar por equipo
+        from sqlalchemy.orm import joinedload
+        titulares = db.query(AlineacionPartido).join(
+            Jugador, AlineacionPartido.id_jugador == Jugador.id_jugador
+        ).filter(
             AlineacionPartido.id_partido == partido_id,
-            AlineacionPartido.id_equipo == id_equipo,
+            Jugador.id_equipo == id_equipo,
             AlineacionPartido.titular == True
         ).all()
 
