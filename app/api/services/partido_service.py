@@ -754,10 +754,12 @@ def _inicializar_estados_jugadores(db: Session, partido: Partido, ids_equipos: l
         else:
             ids_convocados = [c.id_jugador for c in convocados]
 
-        # Obtener titulares de la alineación
-        titulares = db.query(AlineacionPartido).filter(
+        # Obtener titulares de la alineación (join con Jugador para filtrar por equipo)
+        titulares = db.query(AlineacionPartido).join(
+            Jugador, AlineacionPartido.id_jugador == Jugador.id_jugador
+        ).filter(
             AlineacionPartido.id_partido == partido.id_partido,
-            AlineacionPartido.id_equipo == id_equipo,
+            Jugador.id_equipo == id_equipo,
             AlineacionPartido.titular == True
         ).all()
         ids_titulares = [a.id_jugador for a in titulares]
