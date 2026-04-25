@@ -289,3 +289,70 @@ def obtener_staff_router(equipo_id: int, db: Session = Depends(get_db)):
     if not staff:
         raise HTTPException(404, "Equipo no encontrado")
     return staff
+
+
+@router.get("/usuario/mi-equipo")
+def obtener_mi_equipo(
+    liga_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Obtener el equipo del usuario actual en una liga específica.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (query parameter)
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: Información del equipo con id_equipo, nombre, escudo, etc.
+
+    Requiere autenticación: Sí
+    Roles permitidos: Todos los autenticados
+
+    Raises:
+        HTTPException 404: Si el usuario no tiene equipo en esa liga
+    """
+    from app.models.equipo import Equipo
+    from app.models.jugador import Jugador
+
+    # Buscar si el usuario es jugador en algún equipo de la liga
+    jugador = db.query(Jugador).join(
+        Equipo, Jugador.id_equipo == Equipo.id_equipo
+    ).filter(
+        Jugador.id_usuario == current_user.id_usuario,
+        Equipo.id_liga == liga_id
+    ).first()
+
+    if jugador:
+        equipo = db.query(Equipo).filter(Equipo.id_equipo == jugador.id_equipo).first()
+        return {
+            "id_equipo": equipo.id_equipo,
+            "nombre": equipo.nombre,
+            "escudo": equipo.escudo,
+            "colores": equipo.colores,
+            "id_liga": equipo.id_liga,
+            "id_entrenador": equipo.id_entrenador,
+            "id_delegado": equipo.id_delegado,
+        }
+
+    # Buscar si el usuario es entrenador o delegado
+    equipo = db.query(Equipo).filter(
+        ((Equipo.id_entrenador == current_user.id_usuario) |
+         (Equipo.id_delegado == current_user.id_usuario)) &
+        (Equipo.id_liga == liga_id)
+    ).first()
+
+    if equipo:
+        return {
+            "id_equipo": equipo.id_equipo,
+            "nombre": equipo.nombre,
+            "escudo": equipo.escudo,
+            "colores": equipo.colores,
+            "id_liga": equipo.id_liga,
+            "id_entrenador": equipo.id_entrenador,
+            "id_delegado": equipo.id_delegado,
+        }
+
+    raise HTTPException(404, "Usuario no tiene equipo en esta liga")

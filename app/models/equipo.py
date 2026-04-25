@@ -66,3 +66,4 @@ class Equipo(Base):
     partidos_local = relationship("Partido", foreign_keys="Partido.id_equipo_local", lazy="raise", cascade="all, delete-orphan")
     partidos_visitante = relationship("Partido", foreign_keys="Partido.id_equipo_visitante", lazy="raise", cascade="all, delete-orphan")
     invitaciones = relationship("Invitacion", back_populates="equipo", lazy="raise", cascade="all, delete-orphan")
+    estados_jugadores_partido = relationship("EstadoJugadorPartido", back_populates="equipo", lazy="raise", cascade="all, delete-orphan")

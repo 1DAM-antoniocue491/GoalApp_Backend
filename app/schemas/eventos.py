@@ -46,10 +46,18 @@ class EventoPartidoBase(BaseModel):
 class EventoPartidoCreate(EventoPartidoBase):
     """
     Schema para crear un nuevo evento de partido.
-    Usado en el endpoint POST /eventos-partido/
-    Hereda todos los campos de EventoPartidoBase como requeridos.
+    Usado en el endpoint POST /eventos/
+
+    Attributes:
+        id_partido (int): ID del partido
+        id_jugador (int): ID del jugador involucrado
+        tipo_evento (TipoEvento): Tipo de evento
+        minuto (int): Minuto del evento (1-120)
+        id_jugador_sale (int | None): ID del jugador que sale (solo para sustituciones)
+        puntuacion_mvp (float | None): Puntuación MVP (0-10, solo para tipo='mvp')
+        incidencias (str | None): Notas adicionales (motivo de tarjeta, etc.)
     """
-    pass
+    id_jugador_sale: int | None = None  # Solo para tipo_evento='cambio'
 
 class EventoPartidoUpdate(BaseModel):
     """

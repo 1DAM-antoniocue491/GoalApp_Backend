@@ -39,7 +39,8 @@ class EventoPartido(Base):
 
     # Relaciones: partido y jugador involucrado
     id_partido = Column(Integer, ForeignKey("partidos.id_partido"), nullable=False)
-    id_jugador = Column(Integer, ForeignKey("jugadores.id_jugador"), nullable=False)
+    id_jugador = Column(Integer, ForeignKey("jugadores.id_jugador"), nullable=False)  # Jugador que entra (en caso de cambio)
+    id_jugador_sale = Column(Integer, ForeignKey("jugadores.id_jugador"), nullable=True)  # Jugador que sale (solo para cambios)
 
     # Información del evento
     tipo_evento = Column(String(50), nullable=False)  # Ejemplo: "Gol", "Tarjeta Amarilla", "Tarjeta Roja", "Cambio", "MVP"
@@ -57,4 +58,5 @@ class EventoPartido(Base):
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
     partido = relationship("Partido", back_populates="eventos", lazy="raise")
-    jugador = relationship("Jugador", lazy="raise")
+    jugador = relationship("Jugador", foreign_keys=[id_jugador], lazy="raise")  # Jugador que entra
+    jugador_sale = relationship("Jugador", foreign_keys=[id_jugador_sale], lazy="raise")  # Jugador que sale

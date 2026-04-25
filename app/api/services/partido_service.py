@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Partido.
 Maneja operaciones CRUD de partidos, incluyendo gestión de equipos local y visitante,
 marcadores, fechas y estados del partido.
 """
-from sqlalchemy.orm import Session, selectinload, aliased
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, and_
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -16,6 +16,7 @@ from app.models.convocatoria_partido import ConvocatoriaPartido
 from app.models.alineacion_partido import AlineacionPartido
 from app.models.jugador import Jugador
 from app.models.evento_partido import EventoPartido
+from app.models.estado_jugador_partido import EstadoJugadorPartido
 from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest, FinalizarPartidoRequest
 
 
@@ -139,16 +140,15 @@ def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
     Returns:
         list: Lista de partidos con nombres y escudos de equipos
     """
-    EquipoLocal = aliased(Equipo)
-    EquipoVisitante = aliased(Equipo)
+    EquipoVisitante = Equipo  # Alias para el equipo visitante
 
     query = db.query(
         Partido,
-        EquipoLocal.nombre.label("nombre_equipo_local"),
-        EquipoLocal.escudo.label("escudo_equipo_local"),
+        Equipo.nombre.label("nombre_equipo_local"),
+        Equipo.escudo.label("escudo_equipo_local"),
         EquipoVisitante.nombre.label("nombre_equipo_visitante"),
         EquipoVisitante.escudo.label("escudo_equipo_visitante")
-    ).join(EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo)\
+    ).join(Equipo, Partido.id_equipo_local == Equipo.id_equipo)\
      .join(EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo)
 
     if liga_id is not None:
@@ -299,7 +299,7 @@ def obtener_partidos_en_vivo(db: Session):
             "estado": partido.estado,
             "nombre_equipo_local": equipo_local.nombre if equipo_local else "Unknown",
             "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
-            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
+            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_local else "Unknown",
             "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
         })
 
@@ -712,10 +712,67 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
 
     # Cambiar estado a 'en_juego'
     partido.estado = "en_juego"
+
+    # Inicializar estados de los jugadores
+    _inicializar_estados_jugadores(db, partido, [partido.id_equipo_local, partido.id_equipo_visitante])
+
     db.commit()
     db.refresh(partido)
 
     return partido
+
+
+def _inicializar_estados_jugadores(db: Session, partido: Partido, ids_equipos: list[int]):
+    """
+    Inicializa los estados de los jugadores al inicio del partido:
+    - Once inicial (titulares) = 'jugando'
+    - Resto de convocados = 'suplente'
+    - Jugadores no convocados = no se registran (no pueden participar)
+
+    Args:
+        db (Session): Sesión de base de datos
+        partido (Partido): Objeto del partido
+        ids_equipos (list[int]): IDs de los equipos a inicializar
+    """
+    for id_equipo in ids_equipos:
+        # Obtener jugadores convocados para este partido
+        convocados = db.query(ConvocatoriaPartido).filter(
+            ConvocatoriaPartido.id_partido == partido.id_partido,
+            ConvocatoriaPartido.id_equipo == id_equipo
+        ).all()
+
+        if not convocados:
+            # Si no hay convocados registrados, usar todos los jugadores del equipo
+            jugadores_equipo = db.query(Jugador).filter(
+                Jugador.id_equipo == id_equipo,
+                Jugador.activo == True
+            ).all()
+            ids_convocados = [j.id_jugador for j in jugadores_equipo]
+        else:
+            ids_convocados = [c.id_jugador for c in convocados]
+
+        # Obtener titulares de la alineación
+        titulares = db.query(AlineacionPartido).filter(
+            AlineacionPartido.id_partido == partido.id_partido,
+            AlineacionPartido.id_equipo == id_equipo,
+            AlineacionPartido.titular == True
+        ).all()
+        ids_titulares = [a.id_jugador for a in titulares]
+
+        # Crear registros de estado para cada jugador convocado
+        for id_jugador in ids_convocados:
+            estado = "jugando" if id_jugador in ids_titulares else "suplente"
+            minuto_entrada = 0 if id_jugador in ids_titulares else None
+
+            estado_registro = EstadoJugadorPartido(
+                id_partido=partido.id_partido,
+                id_jugador=id_jugador,
+                id_equipo=id_equipo,
+                estado=estado,
+                minuto_entrada=minuto_entrada,
+                minuto_salida=None
+            )
+            db.add(estado_registro)
 
 
 def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoRequest, usuario_id: int):

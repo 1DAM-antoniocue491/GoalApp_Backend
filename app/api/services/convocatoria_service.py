@@ -27,12 +27,16 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
         List[ConvocatoriaPartido]: Lista de convocatorias creadas
 
     Raises:
-        ValueError: Si el partido no existe o si hay más de 11 titulares
+        ValueError: Si el partido no existe, está iniciado o hay más de 11 titulares
     """
     # Verificar que el partido existe
     partido = db.query(Partido).filter(Partido.id_partido == datos.id_partido).first()
     if not partido:
         raise ValueError("Partido no encontrado")
+
+    # Verificar que el partido no está iniciado o finalizado
+    if partido.estado in ["En Juego", "Finalizado"]:
+        raise ValueError(f"No se puede modificar convocatoria de partido {partido.estado.lower()}")
 
     # Contar titulares
     titulares = sum(1 for j in datos.jugadores if j.es_titular)
@@ -185,12 +189,16 @@ def eliminar_convocatoria(db: Session, id_partido: int) -> bool:
         bool: True si se eliminó correctamente
 
     Raises:
-        ValueError: Si el partido no existe
+        ValueError: Si el partido no existe o está iniciado
     """
     # Verificar que el partido existe
     partido = db.query(Partido).filter(Partido.id_partido == id_partido).first()
     if not partido:
         raise ValueError("Partido no encontrado")
+
+    # Verificar que el partido no está iniciado o finalizado
+    if partido.estado in ["En Juego", "Finalizado"]:
+        raise ValueError(f"No se puede modificar convocatoria de partido {partido.estado.lower()}")
 
     # Eliminar convocatoria
     db.query(ConvocatoriaPartido).filter(

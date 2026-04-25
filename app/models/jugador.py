@@ -51,3 +51,4 @@ class Jugador(Base):
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
     usuario = relationship("Usuario", lazy="raise")
     equipo = relationship("Equipo", back_populates="jugadores", lazy="raise")
+    estados_partido = relationship("EstadoJugadorPartido", back_populates="jugador", lazy="raise")
