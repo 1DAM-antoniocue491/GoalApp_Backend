@@ -87,8 +87,6 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
         raise ValueError("Partido no encontrado")
 
     # Obtener convocatorias con jugadores y usuarios cargados (usar joinedload para evitar lazy='raise')
-    from sqlalchemy.orm import joinedload
-
     convocatorias = db.query(ConvocatoriaPartido).options(
         joinedload(ConvocatoriaPartido.jugador).joinedload(Jugador.usuario)
     ).filter(
@@ -150,8 +148,6 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
         raise ValueError("El equipo no participa en este partido")
 
     # Obtener convocatorias con joinedload para evitar lazy='raise'
-    from sqlalchemy.orm import joinedload
-
     convocatorias = db.query(ConvocatoriaPartido).options(
         joinedload(ConvocatoriaPartido.jugador).joinedload(Jugador.usuario)
     ).join(

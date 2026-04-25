@@ -738,10 +738,12 @@ def _inicializar_estados_jugadores(db: Session, partido: Partido, ids_equipos: l
         ids_equipos (list[int]): IDs de los equipos a inicializar
     """
     for id_equipo in ids_equipos:
-        # Obtener jugadores convocados para este partido
-        convocados = db.query(ConvocatoriaPartido).filter(
+        # Obtener jugadores convocados para este partido (join con Jugador para filtrar por equipo)
+        convocados = db.query(ConvocatoriaPartido).join(
+            Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
+        ).filter(
             ConvocatoriaPartido.id_partido == partido.id_partido,
-            ConvocatoriaPartido.id_equipo == id_equipo
+            Jugador.id_equipo == id_equipo
         ).all()
 
         if not convocados:
