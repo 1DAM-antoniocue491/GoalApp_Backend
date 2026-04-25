@@ -95,10 +95,19 @@ def crear_alineaciones_bulk(db: Session, datos: AlineacionBulkCreate) -> List[Al
     if not partido:
         raise ValueError("Partido no encontrado")
 
-    # Contar titulares
-    titulares = sum(1 for a in datos.alineaciones if a.titular)
-    if titulares > 11:
-        raise ValueError("No puede haber más de 11 titulares por equipo")
+    # Contar titulares por equipo (máximo 11 por equipo)
+    # Agrupar alineaciones por equipo usando el id_jugador -> id_equipo
+    from collections import defaultdict
+    titulares_por_equipo = defaultdict(int)
+    for a in datos.alineaciones:
+        if a.titular:
+            jugador = db.query(Jugador).filter(Jugador.id_jugador == a.id_jugador).first()
+            if jugador:
+                titulares_por_equipo[jugador.id_equipo] += 1
+
+    for id_equipo, cantidad in titulares_por_equipo.items():
+        if cantidad > 11:
+            raise ValueError(f"No puede haber más de 11 titulares por equipo (equipo {id_equipo} tiene {cantidad})")
 
     # Eliminar alineaciones existentes del partido
     db.query(AlineacionPartido).filter(
