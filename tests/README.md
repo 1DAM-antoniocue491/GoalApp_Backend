@@ -18,7 +18,6 @@ tests/
 ├── test_partidos.py             # Tests de partidos
 ├── test_eventos.py              # Tests de eventos de partido
 ├── test_convocatorias.py        # Tests de convocatorias
-├── test_formaciones.py          # Tests de formaciones
 ├── test_notificaciones.py       # Tests de notificaciones
 ├── test_imagenes.py             # Tests de gestión de imágenes
 ├── test_permissions.py          # Tests de permisos por rol

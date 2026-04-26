@@ -331,7 +331,7 @@ def eliminar_partido_router(partido_id: int, db: Session = Depends(get_db)):
     Eliminar un partido.
 
     Elimina un partido del sistema. Esta acción puede afectar registros relacionados
-    como eventos, formaciones y estadísticas.
+    como eventos y estadísticas.
 
     Parámetros:
         - partido_id (int): ID del partido a eliminar (path parameter)

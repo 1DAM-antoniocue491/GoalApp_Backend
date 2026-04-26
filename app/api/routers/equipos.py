@@ -157,7 +157,7 @@ def eliminar_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
     Eliminar un equipo.
 
     Elimina un equipo del sistema. Esta acción puede afectar registros relacionados
-    como jugadores, partidos y formaciones.
+    como jugadores y partidos.
 
     Parámetros:
         - equipo_id (int): ID del equipo a eliminar (path parameter)

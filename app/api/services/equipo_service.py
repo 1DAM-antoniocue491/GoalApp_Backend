@@ -117,8 +117,6 @@ def eliminar_equipo(db: Session, equipo_id: int):
     # Cargar el equipo con todas sus relaciones para que cascade delete funcione
     equipo = db.query(Equipo).options(
         joinedload(Equipo.jugadores),
-        joinedload(Equipo.formaciones_equipo),
-        joinedload(Equipo.formaciones_partido),
         joinedload(Equipo.partidos_local),
         joinedload(Equipo.partidos_visitante),
         joinedload(Equipo.invitaciones),

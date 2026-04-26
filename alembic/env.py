@@ -24,10 +24,6 @@ from app.models.equipo import Equipo
 from app.models.jugador import Jugador
 from app.models.partido import Partido
 from app.models.evento_partido import EventoPartido
-from app.models.formacion import Formacion
-from app.models.formacion_equipo import FormacionEquipo
-from app.models.formacion_partido import FormacionPartido
-from app.models.posicion_formacion import PosicionFormacion
 from app.models.alineacion_partido import AlineacionPartido
 from app.models.notificacion import Notificacion
 from app.models.convocatoria_partido import ConvocatoriaPartido

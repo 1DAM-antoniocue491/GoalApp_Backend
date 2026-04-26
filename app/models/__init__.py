@@ -28,15 +28,11 @@ from .usuario_sigue_liga import UsuarioSigueLiga
 # Modelos que dependen de equipo y jornada
 from .jugador import Jugador
 from .partido import Partido
-from .formacion import Formacion
-from .formacion_equipo import FormacionEquipo
 
 # Modelos que dependen de partido
 from .evento_partido import EventoPartido
 from .alineacion_partido import AlineacionPartido
 from .convocatoria_partido import ConvocatoriaPartido
-from .formacion_partido import FormacionPartido
-from .posicion_formacion import PosicionFormacion
 
 # Modelos que dependen de notificaciones
 from .notificacion import Notificacion
@@ -55,12 +51,8 @@ __all__ = [
     "UsuarioSigueLiga",
     "Jugador",
     "Partido",
-    "Formacion",
-    "FormacionEquipo",
-    "FormacionPartido",
     "EventoPartido",
     "AlineacionPartido",
     "ConvocatoriaPartido",
-    "PosicionFormacion",
     "Notificacion",
 ]

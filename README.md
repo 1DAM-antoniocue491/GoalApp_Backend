@@ -24,7 +24,6 @@ Este backend es una **API REST** que gestiona una aplicacion de ligas de futbol 
 - **Ligas y Equipos**: Organizacion de competiciones
 - **Jugadores**: Registro de participantes
 - **Partidos y Eventos**: Seguimiento de partidos en tiempo real
-- **Formaciones**: Tacticas de juego
 - **Notificaciones**: Sistema de avisos
 
 ---
@@ -244,9 +243,9 @@ El servidor estara disponible en: `http://127.0.0.1:8000`
           └─────────────┘
                  │
                  ▼
-          ┌─────────────────┐
-          │formacion_partido│
-          └─────────────────┘
+          ┌─────────────┐
+          │  partidos   │
+          └─────────────┘
 ```
 
 ### Tablas de la Base de Datos
@@ -390,50 +389,6 @@ Mensajes para usuarios.
 | id_usuario | INT (FK) | Usuario destinatario |
 | mensaje | TEXT | Contenido del mensaje |
 | leida | BOOLEAN | Ha sido leida? |
-| created_at | DATETIME | Fecha de creacion |
-| updated_at | DATETIME | Fecha de actualizacion |
-
-#### formaciones
-Tacticas de juego disponibles.
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id_formacion | INT (PK) | Identificador unico |
-| nombre | VARCHAR(20) | Nombre (ej: "4-4-2", "4-3-3") |
-| created_at | DATETIME | Fecha de creacion |
-| updated_at | DATETIME | Fecha de actualizacion |
-
-#### formacion_equipo
-Formacion preferida de un equipo.
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id_formacion_equipo | INT (PK) | Identificador unico |
-| id_equipo | INT (FK) | Equipo |
-| id_formacion | INT (FK) | Formacion |
-| created_at | DATETIME | Fecha de creacion |
-| updated_at | DATETIME | Fecha de actualizacion |
-
-#### formacion_partido
-Formacion usada en un partido.
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id_formacion_partido | INT (PK) | Identificador unico |
-| id_partido | INT (FK) | Partido |
-| id_equipo | INT (FK) | Equipo |
-| id_formacion | INT (FK) | Formacion usada |
-| created_at | DATETIME | Fecha de creacion |
-| updated_at | DATETIME | Fecha de actualizacion |
-
-#### posiciones_formacion
-Posiciones dentro de una formacion.
-
-| Campo | Tipo | Descripcion |
-|-------|------|-------------|
-| id_posicion | INT (PK) | Identificador unico |
-| id_formacion | INT (FK) | Formacion |
-| nombre | VARCHAR(50) | Nombre de la posicion |
 | created_at | DATETIME | Fecha de creacion |
 | updated_at | DATETIME | Fecha de actualizacion |
 
@@ -733,23 +688,6 @@ Listar eventos de un partido.
   }
 ]
 ```
-
----
-
-### Formaciones
-
-#### POST /formaciones/
-Crear formacion (requiere rol admin).
-
-**Request:**
-```json
-{
-  "nombre": "4-4-2"
-}
-```
-
-#### GET /formaciones/
-Listar formaciones.
 
 ---
 

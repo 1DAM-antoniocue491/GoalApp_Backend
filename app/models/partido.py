@@ -66,5 +66,4 @@ class Partido(Base):
     eventos = relationship("EventoPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
     alineaciones = relationship("AlineacionPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
     convocatorias = relationship("ConvocatoriaPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
-    formaciones = relationship("FormacionPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")
     estados_jugadores = relationship("EstadoJugadorPartido", back_populates="partido", lazy="raise", cascade="all, delete-orphan")

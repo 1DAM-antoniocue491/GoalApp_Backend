@@ -83,7 +83,8 @@ class JugadorAlineadoResponse(BaseModel):
         id_jugador (int): ID del jugador
         nombre (str): Nombre del jugador
         dorsal (int): Número de dorsal
-        posicion (str): Posición del jugador en el campo
+        posicion_jugador (str): Posición habitual del jugador
+        posicion_campo (str | None): Posición en el campo en este partido (obsoleto)
         id_posicion (int): ID de la posición
         titular (bool): Si es titular
     """
@@ -92,7 +93,7 @@ class JugadorAlineadoResponse(BaseModel):
     nombre: str
     dorsal: int
     posicion_jugador: str  # Posición habitual del jugador
-    posicion_campo: str  # Posición en el campo en este partido
+    posicion_campo: Optional[str] = None  # Obsoleto: posición en el campo eliminada
     id_posicion: int
     titular: bool
 

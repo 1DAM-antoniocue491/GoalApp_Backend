@@ -115,9 +115,9 @@ def actualizar_jugador_router(jugador_id: int, datos: JugadorUpdate, db: Session
 def eliminar_jugador_router(jugador_id: int, db: Session = Depends(get_db)):
     """
     Eliminar un jugador.
-    
+
     Elimina un jugador del sistema. Esta acción puede afectar registros relacionados
-    como eventos de partido y posiciones en formaciones.
+    como eventos de partido.
     
     Parámetros:
         - jugador_id (int): ID del jugador a eliminar (path parameter)

@@ -10,7 +10,6 @@ from typing import List
 from app.models.alineacion_partido import AlineacionPartido
 from app.models.jugador import Jugador
 from app.models.partido import Partido
-from app.models.posicion_formacion import PosicionFormacion
 from app.models.equipo import Equipo
 from app.schemas.alineacion import (
     AlineacionCreate,
@@ -44,13 +43,6 @@ def crear_alineacion(db: Session, datos: AlineacionCreate) -> AlineacionPartido:
     jugador = db.query(Jugador).filter(Jugador.id_jugador == datos.id_jugador).first()
     if not jugador:
         raise ValueError("Jugador no encontrado")
-
-    # Verificar que la posición existe
-    posicion = db.query(PosicionFormacion).filter(
-        PosicionFormacion.id_posicion == datos.id_posicion
-    ).first()
-    if not posicion:
-        raise ValueError("Posición no encontrada")
 
     # Verificar que el jugador no esté ya alineado en este partido
     alineacion_existente = db.query(AlineacionPartido).filter(
@@ -121,13 +113,6 @@ def crear_alineaciones_bulk(db: Session, datos: AlineacionBulkCreate) -> List[Al
         jugador = db.query(Jugador).filter(Jugador.id_jugador == alineacion_data.id_jugador).first()
         if not jugador:
             raise ValueError(f"Jugador con ID {alineacion_data.id_jugador} no encontrado")
-
-        # Verificar que la posición existe
-        posicion = db.query(PosicionFormacion).filter(
-            PosicionFormacion.id_posicion == alineacion_data.id_posicion
-        ).first()
-        if not posicion:
-            raise ValueError(f"Posición con ID {alineacion_data.id_posicion} no encontrada")
 
         alineacion = AlineacionPartido(
             id_partido=datos.id_partido,
@@ -232,18 +217,15 @@ def obtener_alineacion_equipo(
 
     for alineacion in alineaciones:
         jugador = db.query(Jugador).filter(Jugador.id_jugador == alineacion.id_jugador).first()
-        posicion = db.query(PosicionFormacion).filter(
-            PosicionFormacion.id_posicion == alineacion.id_posicion
-        ).first()
 
-        if jugador and posicion:
+        if jugador:
             jugador_response = JugadorAlineadoResponse(
                 id_alineacion=alineacion.id_alineacion,
                 id_jugador=jugador.id_jugador,
                 nombre=jugador.usuario.nombre,
                 dorsal=jugador.dorsal,
                 posicion_jugador=jugador.posicion,
-                posicion_campo=posicion.nombre,
+                posicion_campo=None,  # Posición de campo eliminada
                 id_posicion=alineacion.id_posicion,
                 titular=alineacion.titular
             )
@@ -286,11 +268,6 @@ def actualizar_alineacion(
 
     # Actualizar posición si se proporciona
     if datos.id_posicion is not None:
-        posicion = db.query(PosicionFormacion).filter(
-            PosicionFormacion.id_posicion == datos.id_posicion
-        ).first()
-        if not posicion:
-            raise ValueError(f"Posición con ID {datos.id_posicion} no encontrada")
         alineacion.id_posicion = datos.id_posicion
 
     # Actualizar estado de titular si se proporciona

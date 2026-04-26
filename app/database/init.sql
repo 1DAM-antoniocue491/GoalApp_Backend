@@ -35,21 +35,6 @@ CREATE TABLE ligas (
     updated_at TIMESTAMPTZ NULL
 );
 
-CREATE TABLE posicion_formacion (
-    id_posicion SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) NOT NULL,
-    descripcion VARCHAR(255),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE formaciones (
-    id_formacion SERIAL PRIMARY KEY,
-    nombre VARCHAR(20) NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Tablas con foreign keys a tablas independientes
 
 CREATE TABLE usuario_rol (
@@ -170,35 +155,11 @@ CREATE TABLE alineacion_partido (
     id_alineacion SERIAL PRIMARY KEY,
     id_partido INT NOT NULL,
     id_jugador INT NOT NULL,
-    id_posicion INT NOT NULL,
     titular BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (id_partido) REFERENCES partidos(id_partido),
-    FOREIGN KEY (id_jugador) REFERENCES jugadores(id_jugador),
-    FOREIGN KEY (id_posicion) REFERENCES posicion_formacion(id_posicion)
-);
-
-CREATE TABLE formacion_equipo (
-    id_formacion_equipo SERIAL PRIMARY KEY,
-    id_equipo INT NOT NULL,
-    id_formacion INT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo),
-    FOREIGN KEY (id_formacion) REFERENCES formaciones(id_formacion)
-);
-
-CREATE TABLE formacion_partido (
-    id_formacion_partido SERIAL PRIMARY KEY,
-    id_partido INT NOT NULL,
-    id_equipo INT NOT NULL,
-    id_formacion INT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (id_partido) REFERENCES partidos(id_partido),
-    FOREIGN KEY (id_equipo) REFERENCES equipos(id_equipo),
-    FOREIGN KEY (id_formacion) REFERENCES formaciones(id_formacion)
+    FOREIGN KEY (id_jugador) REFERENCES jugadores(id_jugador)
 );
 
 CREATE TABLE notificaciones (

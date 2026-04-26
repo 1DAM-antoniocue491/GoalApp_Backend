@@ -24,17 +24,13 @@ from .models import (
     jugador,
     partido,
     evento_partido,
-    formacion,
     notificacion,
     convocatoria_partido,
     jornada,
-    posicion_formacion,
     alineacion_partido,
     token_recuperacion,
     invitacion,
     usuario_sigue_liga,
-    formacion_equipo,
-    formacion_partido,
 )
 
 # Importar todos los routers
@@ -48,11 +44,9 @@ from .api.routers import (
     liga_configuracion,
     partidos,
     eventos,
-    formaciones,
     notificaciones,
     imagenes,
     convocatorias,
-    posiciones_formacion,
     alineaciones,
     tokens_recuperacion,
     invitaciones,
@@ -197,13 +191,6 @@ app.include_router(
     tags=["Convocatorias"]
 )
 
-# Posiciones de Formación
-app.include_router(
-    posiciones_formacion.router,
-    prefix="/api/v1",
-    tags=["Posiciones de Formación"]
-)
-
 # Alineaciones
 app.include_router(
     alineaciones.router,
@@ -223,13 +210,6 @@ app.include_router(
     invitaciones.router,
     prefix="/api/v1",
     tags=["Invitaciones"]
-)
-
-# Formaciones y notificaciones
-app.include_router(
-    formaciones.router,
-    prefix="/api/v1",
-    tags=["Formaciones"]
 )
 
 app.include_router(
