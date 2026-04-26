@@ -14,6 +14,7 @@ from app.models.partido import Partido
 from app.models.rol import Rol
 from app.models.usuario_rol import UsuarioRol
 from app.models.usuario import Usuario
+from app.models.notificacion import Notificacion
 from app.schemas.liga import LigaCreate, LigaUpdate
 from app.schemas.clasificacion import ClasificacionItem
 from app.schemas.gestion_usuarios import UsuarioRolUpdate, UsuarioEstadoUpdate, UsuarioLigaResponse
@@ -79,6 +80,22 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
                     id_liga=liga.id_liga
                 )
                 db.add(usuario_rol)
+
+    # Enviar notificación a todos los usuarios del sistema
+    usuarios = db.query(Usuario).all()
+    notificaciones = []
+    for usuario in usuarios:
+        notificacion = Notificacion(
+            id_usuario=usuario.id_usuario,
+            tipo="liga_actualizacion",
+            titulo=f"Nueva liga creada: {liga.nombre}",
+            mensaje=f"Se ha creado una nueva liga '{liga.nombre}' ({liga.temporada}). ¡Únete para participar!",
+            leida=False,
+            id_referencia=liga.id_liga,
+            tipo_referencia="liga"
+        )
+        notificaciones.append(notificacion)
+        db.add(notificacion)
 
     db.commit()
     return _refresh_liga(db, liga.id_liga)
