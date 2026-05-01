@@ -25,7 +25,19 @@ def crear_equipo(db: Session, datos: EquipoCreate, usuario_id: int = None):
 
     Returns:
         Equipo: Objeto Equipo creado con su ID asignado
+    
+    Raises:
+        ValueError: Si ya existe un equipo con el mismo nombre en la misma liga
     """
+    # Verificar que no exista un equipo con el mismo nombre en la misma liga
+    equipo_existente = db.query(Equipo).filter(
+        Equipo.nombre == datos.nombre,
+        Equipo.id_liga == datos.id_liga
+    ).first()
+
+    if equipo_existente:
+        raise ValueError(f"Ya existe un equipo con el nombre '{datos.nombre}' en esta liga")
+
     # Si no se especifica entrenador/delegado, usar el usuario que crea el equipo
     id_entrenador = datos.id_entrenador or usuario_id
     id_delegado = datos.id_delegado or usuario_id

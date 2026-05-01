@@ -24,7 +24,7 @@ CREATE TABLE roles (
 
 CREATE TABLE ligas (
     id_liga SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL UNIQUE,
+    nombre VARCHAR(100) NOT NULL,
     temporada VARCHAR(20) NOT NULL,
     categoria VARCHAR(50) NULL,
     activa BOOLEAN DEFAULT TRUE NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE jornadas (
 
 CREATE TABLE equipos (
     id_equipo SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL UNIQUE,
+    nombre VARCHAR(100) NOT NULL,
     ciudad VARCHAR(255),
     escudo VARCHAR(255),
     colores VARCHAR(50),
@@ -107,6 +107,8 @@ CREATE TABLE equipos (
     FOREIGN KEY (id_entrenador) REFERENCES usuarios(id_usuario),
     FOREIGN KEY (id_delegado) REFERENCES usuarios(id_usuario)
 );
+
+CREATE UNIQUE INDEX idx_equipos_nombre_liga ON equipos(nombre, id_liga);
 
 CREATE TABLE jugadores (
     id_jugador SERIAL PRIMARY KEY,

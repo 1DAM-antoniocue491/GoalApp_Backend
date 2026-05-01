@@ -43,7 +43,22 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
 
     Returns:
         Liga: Objeto Liga creado con su ID asignado
+
+    Raises:
+        ValueError: Si el usuario ya tiene una liga con ese nombre
     """
+    # Verificar si el usuario ya tiene una liga con ese nombre
+    if id_usuario_creador:
+        # Buscar si el usuario ya es admin de una liga con ese nombre
+        ligas_usuario = db.query(Liga).join(UsuarioRol).join(Rol).filter(
+            Liga.nombre == datos.nombre,
+            UsuarioRol.id_usuario == id_usuario_creador,
+            UsuarioRol.id_liga == Liga.id_liga,
+            Rol.nombre == "admin"
+        ).first()
+        
+        if ligas_usuario:
+            raise ValueError(f"Ya tienes una liga con el nombre '{datos.nombre}'")
     liga = Liga(
         nombre=datos.nombre,
         temporada=datos.temporada,

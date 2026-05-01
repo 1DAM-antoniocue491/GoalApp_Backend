@@ -283,3 +283,184 @@ class TestClasificacion:
         response = client.get("/api/v1/ligas/999/clasificacion")
 
         assert response.status_code == 404
+
+
+# ============================================================
+# VALIDACIONES ÚNICAS LIGA
+# ============================================================
+
+class TestValidacionesUnicasLiga:
+    """Tests para validaciones de nombres únicos de ligas."""
+
+    def test_crear_liga_mismo_nombre_admin(self, client, db, rol_admin, datos_liga_nueva):
+        """Usuario no puede crear liga con mismo nombre (ya es admin)."""
+        from app.models.usuario import Usuario
+        from app.api.services.usuario_service import hash_password
+        from app.models.liga import Liga
+        
+        datos_liga_nueva["nombre"] = "Liga Pepe"
+        
+        usuario = Usuario(
+            nombre="Usuario Admin",
+            email="admin@email.com",
+            contraseña_hash=hash_password("password123")
+        )
+        db.add(usuario)
+        db.commit()
+        db.refresh(usuario)
+        
+        from app.models.liga import Liga
+        from app.models.usuario_rol import UsuarioRol
+        print(f"DEBUG: Ligas before API call: {db.query(Liga).count()}")
+        print(f"DEBUG: UsuarioRols before API call: {db.query(UsuarioRol).count()}")
+        print(f"DEBUG: Usuario ID: {usuario.id_usuario}, Email: {usuario.email}")
+        
+        login_response1 = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": usuario.email,
+                "password": "password123"
+            }
+        )
+        token1 = login_response1.json()["access_token"]
+        
+        response1 = client.post(
+            "/api/v1/ligas/",
+            headers={"Authorization": f"Bearer {token1}"},
+            json=datos_liga_nueva
+        )
+        
+        from app.models.liga import Liga
+        print(f"DEBUG: After first API call, Ligas in DB: {db.query(Liga).count()}")
+        print(f"DEBUG: response1.status_code: {response1.status_code}")
+        print(f"DEBUG: response1.json(): {response1.json()}")
+        
+        assert response1.status_code == 200
+        
+        response2 = client.post(
+            "/api/v1/ligas/",
+            headers={"Authorization": f"Bearer {token1}"},
+            json=datos_liga_nueva
+        )
+        
+        assert response2.status_code == 400
+        assert "Ya tienes una liga con el nombre" in response2.json()["detail"]
+
+    def test_dos_usuarios_mismo_nombre(self, client, db, rol_admin, datos_liga_nueva):
+        """Dos usuarios diferentes pueden crear liga con mismo nombre."""
+        from app.models.usuario import Usuario
+        from app.api.services.usuario_service import hash_password
+        from app.models.usuario_rol import UsuarioRol
+        
+        datos_liga_nueva["nombre"] = "Liga Compartida"
+        
+        # User 1 registers and creates league
+        usuario1 = Usuario(
+            nombre="Usuario 1",
+            email="user1@email.com",
+            contraseña_hash=hash_password("password123")
+        )
+        db.add(usuario1)
+        db.commit()
+        db.refresh(usuario1)
+        
+        # User 1 logs in
+        login_response1 = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": usuario1.email,
+                "password": "password123"
+            }
+        )
+        token1 = login_response1.json()["access_token"]
+        headers1 = {"Authorization": f"Bearer {token1}"}
+        
+        # User 1 creates league (should succeed)
+        response1 = client.post(
+            "/api/v1/ligas/",
+            headers=headers1,
+            json=datos_liga_nueva
+        )
+        assert response1.status_code == 200, f"User 1 failed to create league: {response1.text}"
+        liga1_id = response1.json()["id_liga"]
+        
+        # User 2 registers and creates league with same name
+        usuario2 = Usuario(
+            nombre="Usuario 2",
+            email="user2@email.com",
+            contraseña_hash=hash_password("password123")
+        )
+        db.add(usuario2)
+        db.commit()
+        db.refresh(usuario2)
+        
+        # User 2 logs in
+        login_response2 = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": usuario2.email,
+                "password": "password123"
+            }
+        )
+        token2 = login_response2.json()["access_token"]
+        headers2 = {"Authorization": f"Bearer {token2}"}
+        
+        # User 2 creates league with same name (should succeed - different user)
+        response2 = client.post(
+            "/api/v1/ligas/",
+            headers=headers2,
+            json=datos_liga_nueva
+        )
+        assert response2.status_code == 200, f"User 2 failed to create league with same name: {response2.text}"
+
+    def test_aceptar_invitacion_ya_pertenece(self, client, db, rol_admin, usuario_ejemplo, usuario2_ejemplo):
+        """Usuario no puede aceptar invitación si ya pertenece a liga con mismo nombre."""
+        from app.models.invitacion import Invitacion
+        from datetime import datetime, timedelta, timezone
+        from app.models.liga import Liga
+        from app.models.usuario_rol import UsuarioRol
+        
+        liga_nueva = Liga(nombre="Liga INV", temporada="2024-2025", activa=True)
+        db.add(liga_nueva)
+        db.commit()
+        db.refresh(liga_nueva)
+        
+        usuario_rol = UsuarioRol(
+            id_usuario=usuario2_ejemplo.id_usuario,
+            id_rol=rol_admin.id_rol,
+            id_liga=liga_nueva.id_liga
+        )
+        db.add(usuario_rol)
+        db.commit()
+        
+        invitacion = Invitacion(
+            token="tokenprueba123",
+            email=usuario2_ejemplo.email,
+            nombre=usuario2_ejemplo.nombre,
+            id_liga=liga_nueva.id_liga,
+            id_rol=rol_admin.id_rol,
+            invitado_por=usuario_ejemplo.id_usuario,
+            fecha_expiracion=datetime.now(timezone.utc) + timedelta(days=7)
+        )
+        db.add(invitacion)
+        db.commit()
+        db.refresh(invitacion)
+        
+        token_inv = invitacion.token
+        
+        login_response = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": usuario2_ejemplo.email,
+                "password": "password123"
+            }
+        )
+        token = login_response.json()["access_token"]
+        
+        response = client.post(
+            f"/api/v1/invitaciones/aceptar-existente/{token_inv}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        
+        assert response.status_code == 400
+        assert "Ya perteneces a una liga con el nombre" in response.json()["detail"]

@@ -18,7 +18,7 @@ class Equipo(Base):
 
     Attributes:
         id_equipo (int): Identificador único del equipo (Primary Key)
-        nombre (str): Nombre del equipo (máx. 100 caracteres, único)
+        nombre (str): Nombre del equipo (máx. 100 caracteres)
         ciudad (str): Ciudad del equipo (opcional, máx. 255 caracteres)
         escudo (str): URL o path del escudo del equipo (opcional, máx. 255 caracteres)
         colores (str): Colores del equipo (opcional, máx. 50 caracteres)
@@ -38,7 +38,7 @@ class Equipo(Base):
     id_equipo = Column(Integer, primary_key=True)
 
     # Información básica del equipo
-    nombre = Column(String(100), nullable=False, unique=True)  # Nombre único del equipo
+    nombre = Column(String(100), nullable=False)  # Nombre del equipo
     ciudad = Column(String(255), nullable=True)  # Ciudad del equipo (opcional)
     escudo = Column(String(255), nullable=True)  # URL o path del escudo (opcional)
     colores = Column(String(50), nullable=True)  # Ejemplo: "Azul y Blanco"

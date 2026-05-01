@@ -18,7 +18,7 @@ class Liga(Base):
 
     Attributes:
         id_liga (int): Identificador único de la liga (Primary Key)
-        nombre (str): Nombre de la liga (máx. 100 caracteres, único)
+        nombre (str): Nombre de la liga (máx. 100 caracteres)
         temporada (str): Temporada de la liga (ej: "2024/2025", máx. 20 caracteres)
         activa (bool): Si la liga está activa (default: True)
         created_at (datetime): Fecha y hora de creación del registro
@@ -32,7 +32,7 @@ class Liga(Base):
     id_liga = Column(Integer, primary_key=True)
 
     # Información de la liga
-    nombre = Column(String(100), nullable=False, unique=True)  # Nombre único de la liga
+    nombre = Column(String(100), nullable=False)  # Nombre de la liga (no único, puede repetirse entre usuarios)
     temporada = Column(String(20), nullable=False)  # Ejemplo: "2024/2025"
     categoria = Column(String(50), nullable=True)  # Senior, Juvenil A, Cadete, etc.
     activa = Column(Boolean, nullable=False, default=True)  # Liga activa/inactiva

@@ -285,9 +285,6 @@ def aceptar_invitacion(
     db.add(usuario)
     db.flush()  # Obtener ID del usuario
 
-    # Obtener invitación
-    invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
-
     # Asignar rol al usuario en la liga (activo porque acaba de aceptar)
     usuario_rol = UsuarioRol(
         id_usuario=usuario.id_usuario,
@@ -339,7 +336,8 @@ def aceptar_invitacion_usuario_existente(
         bool: True si se aceptó correctamente
 
     Raises:
-        ValueError: Si el token es inválido o el email no coincide
+        ValueError: Si el token es inválido, el email no coincide,
+                   o el usuario ya pertenece a una liga con ese nombre
     """
     # Validar token
     validacion = validar_token_invitacion(db, token)
@@ -357,6 +355,17 @@ def aceptar_invitacion_usuario_existente(
 
     # Obtener invitación
     invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
+
+    # Verificar si el usuario ya pertenece a una liga con ese nombre
+    liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
+    if liga:
+        liga_existente = db.query(UsuarioRol).filter(
+            UsuarioRol.id_usuario == usuario_id,
+            UsuarioRol.id_liga == liga.id_liga
+        ).first()
+        
+        if liga_existente:
+            raise ValueError(f"Ya perteneces a una liga con el nombre '{liga.nombre}'")
 
     # Verificar si ya existe la asignación de rol
     usuario_rol = db.query(UsuarioRol).filter(

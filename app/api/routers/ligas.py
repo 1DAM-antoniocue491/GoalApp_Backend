@@ -55,8 +55,14 @@ def crear_liga_router(liga: LigaCreate, db: Session = Depends(get_db), current_u
 
     Requiere autenticación: Sí
     Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si el usuario ya tiene una liga con el mismo nombre
     """
-    return crear_liga(db, liga, id_usuario_creador=current_user.id_usuario)
+    try:
+        return crear_liga(db, liga, id_usuario_creador=current_user.id_usuario)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 @router.get("/", response_model=list[LigaResponse])
 def listar_ligas(db: Session = Depends(get_db)):
