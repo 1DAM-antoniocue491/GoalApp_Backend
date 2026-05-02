@@ -132,6 +132,7 @@ def eliminar_partido(db: Session, partido_id: int):
 def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
     """
     Obtiene todos los partidos con información de los equipos.
+    Usa outer joins para manejar casos donde un equipo haya sido eliminado.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
@@ -142,14 +143,15 @@ def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
     """
     EquipoVisitante = Equipo  # Alias para el equipo visitante
 
+    # Usar outerjoin para manejar equipos NULL (evita 500 si falta un equipo)
     query = db.query(
         Partido,
         Equipo.nombre.label("nombre_equipo_local"),
         Equipo.escudo.label("escudo_equipo_local"),
         EquipoVisitante.nombre.label("nombre_equipo_visitante"),
         EquipoVisitante.escudo.label("escudo_equipo_visitante")
-    ).join(Equipo, Partido.id_equipo_local == Equipo.id_equipo)\
-     .join(EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo)
+    ).outerjoin(Equipo, Partido.id_equipo_local == Equipo.id_equipo)\
+     .outerjoin(EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo)
 
     if liga_id is not None:
         query = query.filter(Partido.id_liga == liga_id)
@@ -168,9 +170,9 @@ def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
             "estado": partido.estado,
             "created_at": partido.created_at.isoformat() if partido.created_at else None,
             "updated_at": partido.updated_at.isoformat() if partido.updated_at else None,
-            "nombre_equipo_local": nombre_local,
+            "nombre_equipo_local": nombre_local if nombre_local else "Unknown",
             "escudo_equipo_local": escudo_local,
-            "nombre_equipo_visitante": nombre_visitante,
+            "nombre_equipo_visitante": nombre_visitante if nombre_visitante else "Unknown",
             "escudo_equipo_visitante": escudo_visitante,
         })
 
@@ -188,7 +190,11 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
     Returns:
         list: Lista de jornadas con sus partidos
     """
-    partidos = db.query(Partido).filter(Partido.id_liga == liga_id).all()
+    # Usar selectinload para cargar equipos en una sola query (evita N+1)
+    partidos = db.query(Partido).options(
+        selectinload(Partido.equipo_local),
+        selectinload(Partido.equipo_visitante)
+    ).filter(Partido.id_liga == liga_id).all()
 
     # Agrupar por jornada
     jornadas_dict = {}
@@ -197,9 +203,9 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
         if jornada_num not in jornadas_dict:
             jornadas_dict[jornada_num] = []
 
-        # Obtener equipos
-        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
-        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+        # Usar equipos ya cargados gracias a selectinload
+        equipo_local = partido.equipo_local
+        equipo_visitante = partido.equipo_visitante
 
         jornadas_dict[jornada_num].append({
             "id_partido": partido.id_partido,
@@ -217,6 +223,8 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
             "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
             "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
             "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
+            "equipo_local": equipo_local,
+            "equipo_visitante": equipo_visitante,
         })
 
     # Convertir a lista ordenada
@@ -242,14 +250,18 @@ def obtener_partidos_proximos(db: Session, limit: int = 10):
     Returns:
         list: Lista de próximos partidos con información de equipos
     """
-    partidos = db.query(Partido).filter(
+    # Usar selectinload para cargar equipos en una sola query (evita N+1)
+    partidos = db.query(Partido).options(
+        selectinload(Partido.equipo_local),
+        selectinload(Partido.equipo_visitante)
+    ).filter(
         Partido.estado == "programado"
     ).order_by(Partido.fecha.asc()).limit(limit).all()
 
     resultados = []
     for partido in partidos:
-        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
-        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+        equipo_local = partido.equipo_local
+        equipo_visitante = partido.equipo_visitante
 
         resultados.append({
             "id_partido": partido.id_partido,
@@ -280,12 +292,16 @@ def obtener_partidos_en_vivo(db: Session):
     Returns:
         list: Lista de partidos en vivo con información de equipos
     """
-    partidos = db.query(Partido).filter(Partido.estado == "en_juego").all()
+    # Usar selectinload para cargar equipos en una sola query (evita N+1)
+    partidos = db.query(Partido).options(
+        selectinload(Partido.equipo_local),
+        selectinload(Partido.equipo_visitante)
+    ).filter(Partido.estado == "en_juego").all()
 
     resultados = []
     for partido in partidos:
-        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
-        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+        equipo_local = partido.equipo_local
+        equipo_visitante = partido.equipo_visitante
 
         resultados.append({
             "id_partido": partido.id_partido,
@@ -299,7 +315,7 @@ def obtener_partidos_en_vivo(db: Session):
             "estado": partido.estado,
             "nombre_equipo_local": equipo_local.nombre if equipo_local else "Unknown",
             "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
-            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_local else "Unknown",
+            "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
             "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
         })
 
@@ -320,8 +336,17 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
         dict: Mensaje de confirmación y número de partidos creados
 
     Raises:
-        ValueError: Si no hay suficientes equipos o configuración inválida
+        ValueError: Si no hay suficientes equipos, ya existe calendario o configuración inválida
     """
+    # Verificar si ya existe un calendario (partidos programados para esta liga)
+    partidos_existentes = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado == "programado"
+    ).count()
+
+    if partidos_existentes > 0:
+        raise ValueError(f"La liga ya tiene un calendario generado con {partidos_existentes} partidos. Elimina el calendario existente antes de crear uno nuevo.")
+
     # Obtener equipos de la liga
     equipos = db.query(Equipo).filter(Equipo.id_liga == liga_id).all()
 

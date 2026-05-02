@@ -108,6 +108,58 @@ async def subir_imagen_equipo(
     return {"imagen_url": image_url}
 
 
+@router.post("/ligas/{liga_id}", summary="Subir logo de liga")
+async def subir_imagen_liga(
+    liga_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Sube un logo para una liga.
+
+    Solo administradores o usuarios con rol en la liga pueden subir el logo.
+
+    Parámetros:
+        - liga_id (int): ID de la liga
+        - file (UploadFile): Archivo de imagen (JPEG, PNG, WebP)
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: URL de la imagen guardada
+
+    Requiere autenticación: Sí
+    """
+    from app.models.liga import Liga
+    from app.models.usuario_rol import UsuarioRol
+
+    # Verificar permisos: admin o usuario con rol en la liga
+    es_admin = any(rol.nombre == "admin" for rol in current_user.roles)
+
+    liga = db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    if not liga:
+        raise HTTPException(404, "Liga no encontrada")
+
+    if not es_admin:
+        # Verificar si el usuario tiene algún rol en esta liga
+        usuario_rol = db.query(UsuarioRol).filter(
+            UsuarioRol.id_usuario == current_user.id_usuario,
+            UsuarioRol.id_liga == liga_id
+        ).first()
+        if not usuario_rol:
+            raise HTTPException(403, "No tienes permiso para modificar esta liga")
+
+    # Guardar imagen
+    image_url = await save_image(file, subfolder="ligas")
+
+    # Actualizar liga con el nuevo logo
+    liga.logo_url = image_url
+    db.commit()
+
+    return {"imagen_url": image_url}
+
+
 @router.get("/{subfolder}/{filename}", summary="Obtener imagen")
 async def obtener_imagen(
     subfolder: str,

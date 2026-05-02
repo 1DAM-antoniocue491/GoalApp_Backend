@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Equipo.
 Maneja operaciones CRUD de equipos de fútbol, incluyendo gestión de datos,
 asociaciones con liga, entrenador y delegado.
 """
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, case, or_
 from app.models.equipo import Equipo
 from app.models.partido import Partido
@@ -159,17 +159,19 @@ def obtener_equipos_con_rendimiento(db: Session, liga_id: int):
                                           - partidos_jugados, victorias, empates, derrotas
                                           - porcentaje_victorias (0-100)
     """
+    # Obtener todos los partidos finalizados de la liga con una sola query
+    partidos_liga = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado == "finalizado"
+    ).all()
+
     # Obtener todos los equipos de la liga
     equipos = db.query(Equipo).filter(Equipo.id_liga == liga_id).all()
 
     resultados = []
     for equipo in equipos:
-        # Obtener todos los partidos finalizados donde participó este equipo
-        partidos = db.query(Partido).filter(
-            Partido.id_liga == liga_id,
-            Partido.estado == "finalizado",
-            (Partido.id_equipo_local == equipo.id_equipo) | (Partido.id_equipo_visitante == equipo.id_equipo)
-        ).all()
+        # Filtrar partidos del equipo en memoria (evita N+1)
+        partidos = [p for p in partidos_liga if p.id_equipo_local == equipo.id_equipo or p.id_equipo_visitante == equipo.id_equipo]
 
         victorias = 0
         empates = 0
@@ -265,16 +267,19 @@ def obtener_detalle_equipo(db: Session, equipo_id: int, liga_id: int = None):
     # Calcular posición en la liga (si se proporciona liga_id)
     posicion_liga = 1
     if liga_id:
-        # Obtener todos los equipos de la liga y sus puntos
+        # Obtener todos los partidos finalizados de la liga en una sola query (evita N+1)
+        partidos_liga = db.query(Partido).filter(
+            Partido.estado == "finalizado",
+            Partido.id_liga == liga_id
+        ).all()
+
+        # Obtener todos los equipos de la liga
         equipos_liga = db.query(Equipo).filter(Equipo.id_liga == liga_id).all()
         puntos_equipos = []
         for eq in equipos_liga:
             pts = 0
-            parts = db.query(Partido).filter(
-                Partido.estado == "finalizado",
-                Partido.id_liga == liga_id,
-                (Partido.id_equipo_local == eq.id_equipo) | (Partido.id_equipo_visitante == eq.id_equipo)
-            ).all()
+            # Filtrar partidos del equipo en memoria (evita N+1)
+            parts = [p for p in partidos_liga if p.id_equipo_local == eq.id_equipo or p.id_equipo_visitante == eq.id_equipo]
             for p in parts:
                 es_loc = p.id_equipo_local == eq.id_equipo
                 g_eq = p.goles_local if es_loc else p.goles_visitante
@@ -325,15 +330,19 @@ def obtener_proximos_partidos(db: Session, equipo_id: int, limit: int = 5):
     Returns:
         list: Lista de próximos partidos
     """
-    partidos = db.query(Partido).filter(
+    # Usar selectinload para cargar equipos en una sola query (evita N+1)
+    partidos = db.query(Partido).options(
+        selectinload(Partido.equipo_local),
+        selectinload(Partido.equipo_visitante)
+    ).filter(
         Partido.estado.in_(["programado", "en_juego"]),
         (Partido.id_equipo_local == equipo_id) | (Partido.id_equipo_visitante == equipo_id)
     ).order_by(Partido.fecha.asc()).limit(limit).all()
 
     resultados = []
     for partido in partidos:
-        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
-        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+        equipo_local = partido.equipo_local
+        equipo_visitante = partido.equipo_visitante
 
         resultados.append({
             "id_partido": partido.id_partido,
@@ -364,7 +373,11 @@ def obtener_ultimos_partidos(db: Session, equipo_id: int, limit: int = 5):
     Returns:
         list: Lista de últimos partidos con resultado (W/D/L)
     """
-    partidos = db.query(Partido).filter(
+    # Usar selectinload para cargar equipos en una sola query (evita N+1)
+    partidos = db.query(Partido).options(
+        selectinload(Partido.equipo_local),
+        selectinload(Partido.equipo_visitante)
+    ).filter(
         Partido.estado == "finalizado",
         (Partido.id_equipo_local == equipo_id) | (Partido.id_equipo_visitante == equipo_id)
     ).order_by(Partido.fecha.desc()).limit(limit).all()
@@ -384,8 +397,8 @@ def obtener_ultimos_partidos(db: Session, equipo_id: int, limit: int = 5):
             else:
                 resultado = "L"
 
-        equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
-        equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+        equipo_local = partido.equipo_local
+        equipo_visitante = partido.equipo_visitante
 
         resultados.append({
             "id_partido": partido.id_partido,

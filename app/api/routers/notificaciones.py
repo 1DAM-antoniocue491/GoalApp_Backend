@@ -96,10 +96,34 @@ def crear_notificacion_router(
     Roles permitidos: Admin, Sistema
     """
     # Validar que solo admins puedan crear notificaciones manualmente
-    if current_user.rol != "admin":
+    if not any(rol.nombre == "admin" for rol in current_user.roles):
         raise HTTPException(status_code=403, detail="No tienes permiso para crear notificaciones")
 
     return crear_notificacion(db, datos)
+
+
+@router.put("/mark-all-read")
+def marcar_todas_leidas(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Marcar todas las notificaciones del usuario como leídas.
+
+    Cambia el estado de todas las notificaciones no leídas del usuario actual.
+
+    Parámetros:
+        - current_user: Usuario autenticado obtenido del token JWT
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        dict: Mensaje de confirmación con número de notificaciones marcadas
+
+    Requiere autenticación: Sí
+    Roles permitidos: Todos los usuarios autenticados
+    """
+    cantidad = marcar_todas_como_leidas(db, current_user.id_usuario)
+    return {"mensaje": f"{cantidad} notificaciones marcadas como leídas"}
 
 
 @router.patch("/{notificacion_id}/leer")
@@ -132,28 +156,34 @@ def marcar_leida(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.put("/mark-all-read")
-def marcar_todas_leidas(
+@router.put("/{notificacion_id}")
+def marcar_leida_put(
+    notificacion_id: int,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Marcar todas las notificaciones del usuario como leídas.
+    Marcar una notificación como leída (método PUT para compatibilidad).
 
-    Cambia el estado de todas las notificaciones no leídas del usuario actual.
+    Cambia el estado de una notificación a leída. Solo el propietario de la
+    notificación puede marcarla como leída.
 
     Parámetros:
+        - notificacion_id (int): ID de la notificación (path parameter)
         - current_user: Usuario autenticado obtenido del token JWT
         - db (Session): Sesión de base de datos
 
     Returns:
-        dict: Mensaje de confirmación con número de notificaciones marcadas
+        dict: Mensaje de confirmación
 
     Requiere autenticación: Sí
-    Roles permitidos: Todos los usuarios autenticados
+    Roles permitidos: Propietario de la notificación
     """
-    cantidad = marcar_todas_como_leidas(db, current_user.id_usuario)
-    return {"mensaje": f"{cantidad} notificaciones marcadas como leídas"}
+    try:
+        marcar_notificacion_leida(db, notificacion_id, current_user.id_usuario)
+        return {"mensaje": "Notificación marcada como leída", "leida": True}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/{notificacion_id}")

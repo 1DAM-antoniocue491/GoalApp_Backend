@@ -61,14 +61,19 @@ def asignar_rol_directamente(
         tipo_jugador: Tipo de jugador (opcional)
         nombre: Nombre del usuario (para actualizar si no tiene)
     """
-    # Verificar que no exista ya la asignación
+    # Verificar si el usuario ya tiene alguna asignación en esta liga
     asignacion_existente = db.query(UsuarioRol).filter(
         UsuarioRol.id_usuario == id_usuario,
-        UsuarioRol.id_rol == id_rol,
         UsuarioRol.id_liga == id_liga
     ).first()
 
-    if not asignacion_existente:
+    if asignacion_existente:
+        # Actualizar el rol al nuevo rol especificado
+        asignacion_existente.id_rol = id_rol
+        asignacion_existente.activo = 0  # Pendiente hasta que el usuario acepte
+        db.commit()
+    else:
+        # Crear nueva asignación
         usuario_rol = UsuarioRol(
             id_usuario=id_usuario,
             id_rol=id_rol,
@@ -243,39 +248,50 @@ def aceptar_invitacion(
     db: Session,
     token: str,
     email: str,
-    password: str,
-    nombre: str
+    password: str | None = None,
+    nombre: str | None = None
 ) -> Usuario:
     """
-    Acepta una invitación y crea el usuario.
+    Acepta una invitación y crea/activa el usuario.
 
-    Valida el token, crea el usuario con la contraseña hasheada,
-    asigna el rol y marca la invitación como usada.
+    Valida el token, y:
+    - Si el usuario NO existe: lo crea con contraseña y asigna rol activo
+    - Si el usuario YA existe: activa/asigna el rol en la liga
 
     Args:
         db: Sesión de base de datos
         token: Token de la invitación
         email: Email del usuario
-        password: Contraseña del usuario
-        nombre: Nombre del usuario
+        password: Contraseña (solo si es usuario nuevo)
+        nombre: Nombre del usuario (solo si es usuario nuevo)
 
     Returns:
-        Usuario: Usuario creado
+        Usuario: Usuario creado o existente
 
     Raises:
-        ValueError: Si el token es inválido o el email ya existe
+        ValueError: Si el token es inválido
     """
     # Validar token
     validacion = validar_token_invitacion(db, token)
     if not validacion["valido"]:
         raise ValueError(f"Invitación inválida: {validacion.get('motivo', 'desconocido')}")
 
-    # Verificar que el email no exista ya
-    usuario_existente = db.query(Usuario).filter(Usuario.email == email.lower()).first()
-    if usuario_existente:
-        raise ValueError("El email ya está registrado")
+    # Obtener invitación completa
+    invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
+    if not invitacion:
+        raise ValueError("Invitación no encontrada")
 
-    # Crear usuario
+    # Verificar si el usuario ya existe
+    usuario = db.query(Usuario).filter(Usuario.email == email.lower()).first()
+
+    if usuario:
+        # Usuario YA existe - solo activar/asignar rol
+        return aceptar_invitacion_usuario_existente(db, token, usuario.id_usuario)
+
+    # Usuario NUEVO - crear con contraseña
+    if not password or not nombre:
+        raise ValueError("Se requiere contraseña y nombre para usuarios nuevos")
+
     from app.api.services.usuario_service import hash_password
     usuario = Usuario(
         email=email.lower().strip(),
@@ -283,22 +299,21 @@ def aceptar_invitacion(
         nombre=nombre.strip()
     )
     db.add(usuario)
-    db.flush()  # Obtener ID del usuario
+    db.flush()
 
-    # Asignar rol al usuario en la liga (activo porque acaba de aceptar)
+    # Asignar rol activo
     usuario_rol = UsuarioRol(
         id_usuario=usuario.id_usuario,
         id_rol=invitacion.id_rol,
         id_liga=invitacion.id_liga,
-        activo=1  # Activo porque el usuario aceptó la invitación
+        activo=1
     )
     db.add(usuario_rol)
 
-    # Si hay equipo, actualizar el equipo del jugador (si es rol player)
+    # Si es jugador con equipo, crear entrada
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
-            # Crear jugador asociado al equipo
             jugador = Jugador(
                 id_usuario=usuario.id_usuario,
                 id_equipo=invitacion.id_equipo,
@@ -308,7 +323,6 @@ def aceptar_invitacion(
             )
             db.add(jugador)
 
-    # Marcar invitación como usada
     invitacion.usada = True
     db.commit()
     db.refresh(usuario)
@@ -324,7 +338,7 @@ def aceptar_invitacion_usuario_existente(
     """
     Acepta una invitación cuando el usuario ya tiene cuenta.
 
-    Valida el token, actualiza el estado activo del usuario en la liga
+    Valida el token, asigna/actualiza el rol del usuario en la liga
     y marca la invitación como usada.
 
     Args:
@@ -337,7 +351,7 @@ def aceptar_invitacion_usuario_existente(
 
     Raises:
         ValueError: Si el token es inválido, el email no coincide,
-                   o el usuario ya pertenece a una liga con ese nombre
+                   o el usuario ya pertenece a la misma liga
     """
     # Validar token
     validacion = validar_token_invitacion(db, token)
@@ -355,30 +369,37 @@ def aceptar_invitacion_usuario_existente(
 
     # Obtener invitación
     invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
+    if not invitacion:
+        raise ValueError("Invitación no encontrada")
 
-    # Verificar si el usuario ya pertenece a una liga con ese nombre
+    # Obtener liga
     liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
-    if liga:
-        liga_existente = db.query(UsuarioRol).filter(
-            UsuarioRol.id_usuario == usuario_id,
-            UsuarioRol.id_liga == liga.id_liga
-        ).first()
-        
-        if liga_existente:
-            raise ValueError(f"Ya perteneces a una liga con el nombre '{liga.nombre}'")
+    if not liga:
+        raise ValueError("Liga no encontrada")
 
-    # Verificar si ya existe la asignación de rol
-    usuario_rol = db.query(UsuarioRol).filter(
+    # Verificar si el usuario ya tiene un rol activo en esta liga
+    usuario_rol_activo = db.query(UsuarioRol).filter(
         UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_rol == invitacion.id_rol,
+        UsuarioRol.id_liga == invitacion.id_liga,
+        UsuarioRol.activo == 1
+    ).first()
+
+    if usuario_rol_activo:
+        # El usuario ya pertenece activamente a esta liga
+        raise ValueError(f"Ya perteneces a una liga con el nombre '{liga.nombre}'")
+
+    # Verificar si existe asignación (activa o no) en esta liga
+    asignacion_existente = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
         UsuarioRol.id_liga == invitacion.id_liga
     ).first()
 
-    if usuario_rol:
-        # Actualizar a activo
-        usuario_rol.activo = 1
+    if asignacion_existente:
+        # Actualizar al rol de la invitación y activar
+        asignacion_existente.id_rol = invitacion.id_rol
+        asignacion_existente.activo = 1
     else:
-        # Crear nueva asignación activa
+        # Crear nueva asignación activa con el rol de la invitación
         usuario_rol = UsuarioRol(
             id_usuario=usuario_id,
             id_rol=invitacion.id_rol,

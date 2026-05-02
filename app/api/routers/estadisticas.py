@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import List, Optional
+from collections import defaultdict
 
 from app.api.dependencies import get_db
 from app.models.liga import Liga
@@ -462,68 +463,49 @@ def obtener_estadisticas_goles_equipos(liga_id: int, db: Session = Depends(get_d
     if not liga:
         raise HTTPException(404, "Liga no encontrada")
 
+    # Obtener todos los partidos finalizados de la liga con una sola query (evita N+1)
+    partidos_liga = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado == 'FINALIZADO'
+    ).all()
+
+    # Obtener todos los IDs de partido para cargar eventos de una vez
+    partidos_ids = [p.id_partido for p in partidos_liga]
+
+    # Cargar todos los eventos de gol de una vez (evita N+1 anidado)
+    eventos_gol = db.query(EventoPartido).filter(
+        EventoPartido.tipo_evento == TIPO_GOL,
+        EventoPartido.id_partido.in_(partidos_ids)
+    ).all()
+
+    # Agrupar eventos por partido y equipo
+    from collections import defaultdict
+    goles_por_partido_equipo = defaultdict(lambda: defaultdict(int))
+    for evento in eventos_gol:
+        if evento.id_equipo:
+            goles_por_partido_equipo[evento.id_partido][evento.id_equipo] += 1
+
     # Obtener todos los equipos de la liga
     equipos = db.query(Equipo).filter(Equipo.id_liga == liga_id).all()
 
     estadisticas = []
     for equipo in equipos:
-        # Partidos del equipo (como local o visitante)
-        partidos_local = db.query(Partido).filter(
-            Partido.id_liga == liga_id,
-            Partido.id_equipo_local == equipo.id_equipo,
-            Partido.estado == 'FINALIZADO'
-        ).all()
-
-        partidos_visitante = db.query(Partido).filter(
-            Partido.id_liga == liga_id,
-            Partido.id_equipo_visitante == equipo.id_equipo,
-            Partido.estado == 'FINALIZADO'
-        ).all()
-
+        # Filtrar partidos del equipo en memoria (evita N+1)
+        partidos_local = [p for p in partidos_liga if p.id_equipo_local == equipo.id_equipo]
+        partidos_visitante = [p for p in partidos_liga if p.id_equipo_visitante == equipo.id_equipo]
         partidos_jugados = len(partidos_local) + len(partidos_visitante)
 
-        # Goles a favor (como local)
-        goles_favor_local = 0
-        for partido in partidos_local:
-            eventos = db.query(EventoPartido).filter(
-                EventoPartido.id_partido == partido.id_partido,
-                EventoPartido.tipo_evento == TIPO_GOL,
-                EventoPartido.id_equipo == equipo.id_equipo
-            ).all()
-            goles_favor_local += len(eventos)
-
-        # Goles a favor (como visitante)
-        goles_favor_visitante = 0
-        for partido in partidos_visitante:
-            eventos = db.query(EventoPartido).filter(
-                EventoPartido.id_partido == partido.id_partido,
-                EventoPartido.tipo_evento == TIPO_GOL,
-                EventoPartido.id_equipo == equipo.id_equipo
-            ).all()
-            goles_favor_visitante += len(eventos)
-
-        goles_favor = goles_favor_local + goles_favor_visitante
-
-        # Goles en contra (goles del oponente)
+        # Calcular goles usando el diccionario pre-cargado (evita N+1 anidado)
+        goles_favor = 0
         goles_contra = 0
 
-        # Como local: goles del visitante
         for partido in partidos_local:
-            eventos = db.query(EventoPartido).filter(
-                EventoPartido.id_partido == partido.id_partido,
-                EventoPartido.tipo_evento == TIPO_GOL,
-                EventoPartido.id_equipo == partido.id_equipo_visitante
-            ).all()
-            goles_contra += len(eventos)
+            goles_favor += goles_por_partido_equipo[partido.id_partido][equipo.id_equipo]
+            goles_contra += goles_por_partido_equipo[partido.id_partido][partido.id_equipo_visitante]
 
-        # Como visitante: goles del local
         for partido in partidos_visitante:
-            eventos = db.query(EventoPartido).filter(
-                EventoPartido.id_partido == partido.id_partido,
-                EventoPartido.tipo_evento == TIPO_GOL,
-                EventoPartido.id_equipo == partido.id_equipo_local
-            ).all()
-            goles_contra += len(eventos)
+            goles_favor += goles_por_partido_equipo[partido.id_partido][equipo.id_equipo]
+            goles_contra += goles_por_partido_equipo[partido.id_partido][partido.id_equipo_local]
 
         diferencia_goles = goles_favor - goles_contra
         promedio_goles = round(goles_favor / partidos_jugados, 2) if partidos_jugados > 0 else 0

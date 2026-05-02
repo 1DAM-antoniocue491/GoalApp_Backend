@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
 from app.api.dependencies import get_db, get_current_user, require_role
+from app.models.usuario import Usuario
 from app.schemas.invitacion import InvitacionCreate, InvitacionValidarResponse, InvitacionAceptar
 from app.api.services.invitacion_service import (
     crear_invitacion,
@@ -162,30 +163,8 @@ def invitar_a_liga(
                     detail="El jugador debe tener una posición asignada"
                 )
 
-    # Verificar si el usuario ya existe por email
-    usuario_existente = verificar_usuario_existente(db, datos.email)
-
-    if usuario_existente:
-        # El usuario ya existe, asignar rol directamente
-        from app.api.services.invitacion_service import asignar_rol_directamente
-        asignar_rol_directamente(
-            db=db,
-            id_usuario=usuario_existente.id_usuario,
-            id_liga=liga_id,
-            id_rol=datos.id_rol,
-            id_equipo=datos.id_equipo,
-            dorsal=datos.dorsal,
-            posicion=datos.posicion,
-            tipo_jugador=datos.tipo_jugador,
-            nombre=datos.nombre
-        )
-        return {
-            "mensaje": f"El usuario {datos.email} ya estaba registrado. Se le ha asignado el rol directamente.",
-            "usuario_id": usuario_existente.id_usuario,
-            "rol_asignado": True
-        }
-
-    # El usuario no existe, crear invitación
+    # Crear invitación (tanto si el usuario existe como si no)
+    # El usuario podrá aceptar la invitación mediante el enlace enviado por email
     invitacion = crear_invitacion(
         db=db,
         email=datos.email,
@@ -199,8 +178,7 @@ def invitar_a_liga(
         nombre=datos.nombre
     )
 
-    # Enviar email de invitación (en background)
-    # TODO: Implementar envío de email cuando esté configurado el SMTP
+    # El email se envía dentro de crear_invitacion()
 
     return {
         "mensaje": "Invitación creada. Se ha enviado un email al usuario.",
@@ -265,32 +243,69 @@ def validar_invitacion(
 @router.post("/aceptar/{token}")
 def aceptar_invitacion_endpoint(
     token: str,
-    datos: InvitacionAceptar,
+    datos: InvitacionAceptar | None = None,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = BackgroundTasks()
+    current_user: Usuario | None = Depends(get_current_user)
 ):
     """
-    Aceptar una invitación y crear usuario.
+    Aceptar una invitación.
 
-    Valida el token y crea el usuario con el rol asignado.
+    Valida el token y:
+    - Si el usuario NO existe: lo crea con los datos del formulario
+    - Si el usuario YA existe (autenticado): activa el rol directamente
 
     Parámetros:
         - token (str): Token de invitación
-        - datos (InvitacionAceptar): Email, contraseña, nombre
-        - db ( Session): Sesión de base de datos
+        - datos (InvitacionAceptar, opcional): Email, contraseña, nombre (solo si es usuario nuevo)
+        - db (Session): Sesión de base de datos
+        - current_user (opcional): Usuario autenticado (si ya tiene cuenta)
 
     Returns:
-        dict: Mensaje de confirmación y datos del usuario creado
+        dict: Mensaje de confirmación
 
-    Requiere autenticación: No
+    Requiere autenticación: No (solo si el usuario ya existe y está logueado)
     """
-    # Validar que el email coincide
+    # Validar token
     invitacion = validar_token_invitacion(db, token)
 
     if not invitacion["valido"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invitación inválida o expirada: {invitacion.get('motivo', 'desconocido')}"
+        )
+
+    # Si el usuario ya está autenticado, usar su información
+    if current_user:
+        # Verificar que el email del usuario logueado coincide con la invitación
+        if current_user.email.lower() != invitacion["email"].lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El email de tu cuenta no coincide con la invitación"
+            )
+
+        try:
+            aceptar_invitacion_usuario_existente(
+                db=db,
+                token=token,
+                usuario_id=current_user.id_usuario
+            )
+
+            return {
+                "mensaje": "Invitación aceptada correctamente. Rol activado.",
+                "usuario_id": current_user.id_usuario,
+                "email": current_user.email
+            }
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+
+    # Usuario no autenticado - necesita registro
+    if not datos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Se requieren datos de registro (email, password, nombre)"
         )
 
     # Verificar que el email coincide
@@ -322,6 +337,10 @@ def aceptar_invitacion_endpoint(
         )
 
 
+# ============================================================
+# ACEPTAR INVITACIÓN (usuario existente) - ENDPOINT LEGACY
+# ============================================================
+
 @router.post("/aceptar-existente/{token}")
 def aceptar_invitacion_existente_endpoint(
     token: str,
@@ -331,7 +350,8 @@ def aceptar_invitacion_existente_endpoint(
     """
     Aceptar una invitación cuando el usuario ya tiene cuenta.
 
-    Valida el token y activa el rol del usuario en la liga.
+    Endpoint legacy para compatibilidad con tests.
+    Usa el mismo flujo que /aceptar/{token} con usuario autenticado.
 
     Parámetros:
         - token (str): Token de invitación

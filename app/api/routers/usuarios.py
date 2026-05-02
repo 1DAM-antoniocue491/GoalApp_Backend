@@ -87,24 +87,26 @@ def obtener_usuario_actual(current_user: Usuario = Depends(get_current_user)):
     return current_user
 
 @router.get("/{usuario_id}", response_model=UsuarioResponse)
-def obtener_usuario(usuario_id: int, db: Session = Depends(get_db)):
+def obtener_usuario(usuario_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
     Obtener un usuario por su ID.
-    
+
     Devuelve la información detallada de un usuario específico.
-    
+
     Parámetros:
         - usuario_id (int): ID único del usuario (path parameter)
         - db (Session): Sesión de base de datos
-    
+        - current_user: Usuario autenticado (requiere auth)
+
     Returns:
         UsuarioResponse: Información completa del usuario
-    
-    Requiere autenticación: No
-    Roles permitidos: Público
-    
+
+    Requiere autenticación: Sí
+    Roles permitidos: Usuarios autenticados
+
     Raises:
         HTTPException 404: Si el usuario no existe
+        HTTPException 401: Si no está autenticado
     """
     usuario = obtener_usuario_por_id(db, usuario_id)
     # Validar que el usuario exista
