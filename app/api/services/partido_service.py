@@ -153,16 +153,18 @@ def obtener_partidos_con_equipos(db: Session, liga_id: int = None):
     Returns:
         list: Lista de partidos con nombres y escudos de equipos
     """
-    EquipoVisitante = Equipo  # Alias para el equipo visitante
+    # Usar aliases explícitos para evitar duplicate alias error
+    EquipoLocal = aliased(Equipo)
+    EquipoVisitante = aliased(Equipo)
 
     # Usar outerjoin para manejar equipos NULL (evita 500 si falta un equipo)
     query = db.query(
         Partido,
-        Equipo.nombre.label("nombre_equipo_local"),
-        Equipo.escudo.label("escudo_equipo_local"),
+        EquipoLocal.nombre.label("nombre_equipo_local"),
+        EquipoLocal.escudo.label("escudo_equipo_local"),
         EquipoVisitante.nombre.label("nombre_equipo_visitante"),
         EquipoVisitante.escudo.label("escudo_equipo_visitante")
-    ).outerjoin(Equipo, Partido.id_equipo_local == Equipo.id_equipo)\
+    ).outerjoin(EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo)\
      .outerjoin(EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo)
 
     if liga_id is not None:
