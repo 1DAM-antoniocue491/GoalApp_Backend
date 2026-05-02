@@ -149,13 +149,18 @@ def listar_partidos_proximos(limit: int = 10, db: Session = Depends(get_db)):
 
 
 @router.get("/en-vivo", response_model=list)
-def listar_partidos_en_vivo(db: Session = Depends(get_db)):
+def listar_partidos_en_vivo(
+    liga_id: int | None = Query(None, description="Filtrar por ID de liga"),
+    db: Session = Depends(get_db)
+):
     """
     Listar partidos que están en vivo.
 
     Obtiene los partidos que están en estado 'En Juego'.
+    Opcionalmente filtra por liga.
 
     Parámetros:
+        - liga_id (int, optional): ID de la liga para filtrar (query parameter)
         - db (Session): Sesión de base de datos
 
     Returns:
@@ -164,7 +169,7 @@ def listar_partidos_en_vivo(db: Session = Depends(get_db)):
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_partidos_en_vivo(db)
+    return obtener_partidos_en_vivo(db, liga_id)
 
 
 @router.post("/ligas/{liga_id}/crear-calendario", response_model=CalendarCreateResponse, dependencies=[Depends(require_role("admin"))])

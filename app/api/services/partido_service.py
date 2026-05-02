@@ -307,12 +307,13 @@ def obtener_partidos_proximos(db: Session, limit: int = 10):
     return resultados
 
 
-def obtener_partidos_en_vivo(db: Session):
+def obtener_partidos_en_vivo(db: Session, liga_id: int = None):
     """
     Obtiene los partidos que están en vivo.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int, optional): ID de la liga para filtrar
 
     Returns:
         list: Lista de partidos en vivo con información de equipos
@@ -331,6 +332,10 @@ def obtener_partidos_en_vivo(db: Session):
     ).outerjoin(
         EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
     ).filter(Partido.estado == "en_juego")
+
+    # Filtrar por liga si se proporciona
+    if liga_id is not None:
+        query = query.filter(Partido.id_liga == liga_id)
 
     resultados = []
     for partido, equipo_local, equipo_visitante in query.all():
