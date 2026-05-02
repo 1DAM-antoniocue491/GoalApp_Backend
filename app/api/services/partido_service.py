@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Partido.
 Maneja operaciones CRUD de partidos, incluyendo gestión de equipos local y visitante,
 marcadores, fechas y estados del partido.
 """
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, aliased
 from sqlalchemy import func, and_
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -57,15 +57,27 @@ def obtener_partidos(db: Session, liga_id: int = None):
     Returns:
         list[Partido]: Lista con todos los partidos (filtrados por liga si se proporciona)
     """
-    query = db.query(Partido).options(
+    # Usar aliases explícitos para evitar duplicate alias error
+    EquipoLocal = aliased(Equipo)
+    EquipoVisitante = aliased(Equipo)
+
+    query = db.query(
+        Partido,
+        EquipoLocal,
+        EquipoVisitante
+    ).outerjoin(
+        EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo
+    ).outerjoin(
+        EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
+    ).options(
         selectinload(Partido.liga),
-        selectinload(Partido.jornada),
-        selectinload(Partido.equipo_local),
-        selectinload(Partido.equipo_visitante)
+        selectinload(Partido.jornada)
     )
     if liga_id is not None:
         query = query.filter(Partido.id_liga == liga_id)
-    return query.all()
+
+    # Devolver solo los objetos Partido (los equipos se acceden via relación)
+    return [partido for partido, _, _ in query.all()]
 
 
 def obtener_partido_por_id(db: Session, partido_id: int):
@@ -190,22 +202,29 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
     Returns:
         list: Lista de jornadas con sus partidos
     """
-    # Usar selectinload para cargar equipos en una sola query (evita N+1)
-    partidos = db.query(Partido).options(
-        selectinload(Partido.equipo_local),
-        selectinload(Partido.equipo_visitante)
-    ).filter(Partido.id_liga == liga_id).all()
+    # Usar aliases explícitos para evitar duplicate alias error al unir equipos dos veces
+    EquipoLocal = aliased(Equipo)
+    EquipoVisitante = aliased(Equipo)
+
+    # Consulta con joins explícitos usando aliases para evitar conflicto de tablas
+    query = db.query(
+        Partido,
+        EquipoLocal,
+        EquipoVisitante
+    ).outerjoin(
+        EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo
+    ).outerjoin(
+        EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
+    ).filter(Partido.id_liga == liga_id)
+
+    resultados_query = query.all()
 
     # Agrupar por jornada
     jornadas_dict = {}
-    for partido in partidos:
+    for partido, equipo_local, equipo_visitante in resultados_query:
         jornada_num = partido.id_jornada or 1
         if jornada_num not in jornadas_dict:
             jornadas_dict[jornada_num] = []
-
-        # Usar equipos ya cargados gracias a selectinload
-        equipo_local = partido.equipo_local
-        equipo_visitante = partido.equipo_visitante
 
         jornadas_dict[jornada_num].append({
             "id_partido": partido.id_partido,
@@ -223,8 +242,6 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
             "escudo_equipo_local": equipo_local.escudo if equipo_local else None,
             "nombre_equipo_visitante": equipo_visitante.nombre if equipo_visitante else "Unknown",
             "escudo_equipo_visitante": equipo_visitante.escudo if equipo_visitante else None,
-            "equipo_local": equipo_local,
-            "equipo_visitante": equipo_visitante,
         })
 
     # Convertir a lista ordenada
@@ -250,19 +267,25 @@ def obtener_partidos_proximos(db: Session, limit: int = 10):
     Returns:
         list: Lista de próximos partidos con información de equipos
     """
-    # Usar selectinload para cargar equipos en una sola query (evita N+1)
-    partidos = db.query(Partido).options(
-        selectinload(Partido.equipo_local),
-        selectinload(Partido.equipo_visitante)
+    # Usar aliases explícitos para evitar duplicate alias error
+    EquipoLocal = aliased(Equipo)
+    EquipoVisitante = aliased(Equipo)
+
+    # Consulta con joins explícitos usando aliases
+    query = db.query(
+        Partido,
+        EquipoLocal,
+        EquipoVisitante
+    ).outerjoin(
+        EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo
+    ).outerjoin(
+        EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
     ).filter(
         Partido.estado == "programado"
-    ).order_by(Partido.fecha.asc()).limit(limit).all()
+    ).order_by(Partido.fecha.asc()).limit(limit)
 
     resultados = []
-    for partido in partidos:
-        equipo_local = partido.equipo_local
-        equipo_visitante = partido.equipo_visitante
-
+    for partido, equipo_local, equipo_visitante in query.all():
         resultados.append({
             "id_partido": partido.id_partido,
             "id_liga": partido.id_liga,
@@ -292,17 +315,23 @@ def obtener_partidos_en_vivo(db: Session):
     Returns:
         list: Lista de partidos en vivo con información de equipos
     """
-    # Usar selectinload para cargar equipos en una sola query (evita N+1)
-    partidos = db.query(Partido).options(
-        selectinload(Partido.equipo_local),
-        selectinload(Partido.equipo_visitante)
-    ).filter(Partido.estado == "en_juego").all()
+    # Usar aliases explícitos para evitar duplicate alias error
+    EquipoLocal = aliased(Equipo)
+    EquipoVisitante = aliased(Equipo)
+
+    # Consulta con joins explícitos usando aliases
+    query = db.query(
+        Partido,
+        EquipoLocal,
+        EquipoVisitante
+    ).outerjoin(
+        EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo
+    ).outerjoin(
+        EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
+    ).filter(Partido.estado == "en_juego")
 
     resultados = []
-    for partido in partidos:
-        equipo_local = partido.equipo_local
-        equipo_visitante = partido.equipo_visitante
-
+    for partido, equipo_local, equipo_visitante in query.all():
         resultados.append({
             "id_partido": partido.id_partido,
             "id_liga": partido.id_liga,
