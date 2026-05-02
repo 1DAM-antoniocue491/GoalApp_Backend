@@ -258,13 +258,14 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
     return resultados
 
 
-def obtener_partidos_proximos(db: Session, limit: int = 10):
+def obtener_partidos_proximos(db: Session, limit: int = 10, liga_id: int = None):
     """
     Obtiene los próximos partidos programados.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         limit (int): Número máximo de partidos a devolver
+        liga_id (int, optional): ID de la liga para filtrar
 
     Returns:
         list: Lista de próximos partidos con información de equipos
@@ -284,7 +285,13 @@ def obtener_partidos_proximos(db: Session, limit: int = 10):
         EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
     ).filter(
         Partido.estado == "programado"
-    ).order_by(Partido.fecha.asc()).limit(limit)
+    )
+
+    # Filtrar por liga si se proporciona
+    if liga_id is not None:
+        query = query.filter(Partido.id_liga == liga_id)
+
+    query = query.order_by(Partido.fecha.asc()).limit(limit)
 
     resultados = []
     for partido, equipo_local, equipo_visitante in query.all():

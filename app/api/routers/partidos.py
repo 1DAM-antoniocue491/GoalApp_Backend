@@ -128,15 +128,20 @@ def listar_partidos_por_jornada(liga_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/proximos", response_model=list)
-def listar_partidos_proximos(limit: int = 10, db: Session = Depends(get_db)):
+def listar_partidos_proximos(
+    limit: int = 10,
+    liga_id: int | None = Query(None, description="Filtrar por ID de liga"),
+    db: Session = Depends(get_db)
+):
     """
     Listar próximos partidos programados.
 
     Obtiene los próximos partidos que están en estado 'Programado',
-    ordenados por fecha ascendente.
+    ordenados por fecha ascendente. Opcionalmente filtra por liga.
 
     Parámetros:
         - limit (int, optional): Número máximo de partidos a devolver (default: 10)
+        - liga_id (int, optional): ID de la liga para filtrar (query parameter)
         - db (Session): Sesión de base de datos
 
     Returns:
@@ -145,7 +150,7 @@ def listar_partidos_proximos(limit: int = 10, db: Session = Depends(get_db)):
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_partidos_proximos(db, limit)
+    return obtener_partidos_proximos(db, limit, liga_id)
 
 
 @router.get("/en-vivo", response_model=list)
