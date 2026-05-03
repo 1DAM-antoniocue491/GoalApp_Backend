@@ -47,4 +47,6 @@ class UsuarioRol(Base):
 
     # Relaciones
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    usuario = relationship("Usuario", back_populates="usuario_roles", lazy="raise")
+    rol = relationship("Rol", back_populates="usuario_roles", lazy="raise")
     liga = relationship("Liga", back_populates="usuario_roles", lazy="raise")

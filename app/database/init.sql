@@ -224,6 +224,6 @@ CREATE INDEX idx_invitaciones_email ON invitaciones(email);
 INSERT INTO roles (nombre, descripcion) VALUES
     ('admin', 'Administrador del sistema con acceso total'),
     ('coach', 'Entrenador de equipo'),
+    ('delegate', 'Delegado de equipo'),
     ('player', 'Jugador'),
-    ('viewer', 'Visualizador de información pública'),
-    ('delegate', 'Delegado de equipo');
+    ('viewer', 'Visualizador de información pública');

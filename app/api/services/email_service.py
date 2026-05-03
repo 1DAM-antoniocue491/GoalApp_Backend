@@ -106,10 +106,17 @@ Equipo de GoalApp
         mensaje.attach(MIMEText(texto_plano, "plain"))
         mensaje.attach(MIMEText(html_content, "html"))
 
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
+        if settings.SMTP_USE_SSL:
+            # SSL puro (puerto 465)
+            with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
+        else:
+            # TLS (puerto 587)
+            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                server.starttls()
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
 
         return True
 
@@ -216,10 +223,17 @@ Equipo de GoalApp
         mensaje.attach(MIMEText(texto_plano, "plain"))
         mensaje.attach(MIMEText(html_content, "html"))
 
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
+        if settings.SMTP_USE_SSL:
+            # SSL puro (puerto 465)
+            with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
+        else:
+            # TLS (puerto 587)
+            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+                server.starttls()
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                server.sendmail(settings.EMAIL_FROM, email_destino, mensaje.as_string())
 
         return True
 

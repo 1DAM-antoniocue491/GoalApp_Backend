@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+    SMTP_USE_SSL: bool = False  # Usar True para SSL puro (puerto 465), False para TLS (puerto 587)
     EMAIL_FROM: str = ""
     FRONTEND_URL: str = "http://localhost:5173"
     RESET_TOKEN_EXPIRE_MINUTES: int = 30

@@ -44,4 +44,5 @@ class Rol(Base):
 
     # Relaciones
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
+    usuario_roles = relationship("UsuarioRol", back_populates="rol", lazy="raise", foreign_keys="UsuarioRol.id_rol")
     usuarios = relationship("Usuario", secondary="usuario_rol", back_populates="roles", lazy="raise")
