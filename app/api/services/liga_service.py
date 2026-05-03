@@ -448,11 +448,16 @@ def obtener_usuarios_liga(db: Session, liga_id: int) -> list[UsuarioLigaResponse
     Raises:
         ValueError: Si la liga no existe
     """
+    from sqlalchemy.orm import joinedload
+
     liga = obtener_liga_por_id(db, liga_id)
     if not liga:
         raise ValueError("Liga no encontrada")
 
-    usuarios_roles = db.query(UsuarioRol).join(Usuario).join(Rol).filter(
+    usuarios_roles = db.query(UsuarioRol).options(
+        joinedload(UsuarioRol.usuario),
+        joinedload(UsuarioRol.rol)
+    ).filter(
         UsuarioRol.id_liga == liga_id
     ).all()
 
@@ -461,7 +466,7 @@ def obtener_usuarios_liga(db: Session, liga_id: int) -> list[UsuarioLigaResponse
         resultado.append(UsuarioLigaResponse(
             id_usuario_rol=ur.id_usuario_rol,
             id_usuario=ur.id_usuario,
-            nombre_usuario=ur.usuario.nombre_usuario,
+            nombre_usuario=ur.usuario.nombre,
             email=ur.usuario.email,
             id_rol=ur.id_rol,
             nombre_rol=ur.rol.nombre,
