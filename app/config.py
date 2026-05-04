@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     UPLOAD_URL: str = ""
     MAX_IMAGE_SIZE: int = 5 * 1024 * 1024  # 5MB máximo
     ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp"
+
+    # ============================================================
+    # SUPABASE STORAGE
+    # ============================================================
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
+    STORAGE_BUCKET_NAME: str = ""
     
     model_config = {
         "env_file": ".env",  # Lee desde backend/.env

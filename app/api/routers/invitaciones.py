@@ -26,7 +26,8 @@ from app.api.services.invitacion_service import (
     verificar_usuario_existente,
     generar_codigo_invitacion,
     validar_codigo_invitacion,
-    aceptar_invitacion_por_codigo
+    aceptar_invitacion_por_codigo,
+    aceptar_invitacion_por_codigo_usuario_existente
 )
 
 # Configuración del router
@@ -672,25 +673,82 @@ def validar_codigo_invitacion_endpoint(
 @router.post("/aceptar-codigo/{codigo}")
 def aceptar_invitacion_por_codigo_endpoint(
     codigo: str,
-    datos: InvitacionAceptarCodigo,
-    db: Session = Depends(get_db)
+    datos: InvitacionAceptarCodigo | None = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario | None = Depends(get_current_user)
 ):
     """
     Aceptar una invitación mediante código corto.
 
-    Valida el código y crea un nuevo usuario con los datos proporcionados.
+    Valida el código y:
+    - Si el usuario está autenticado: usa los datos del usuario actual
+    - Si NO está autenticado: crea un nuevo usuario con los datos proporcionados
+
     El código solo puede usarse UNA vez.
 
     Parámetros:
         - codigo (str): Código de invitación (6-8 caracteres)
-        - datos (InvitacionAceptarCodigo): Email, contraseña, nombre
+        - datos (InvitacionAceptarCodigo, opcional): Email, contraseña, nombre (solo si no está autenticado)
         - db (Session): Sesión de base de datos
+        - current_user (opcional): Usuario autenticado
 
     Returns:
         dict: Mensaje de confirmación con usuario_id y email
 
-    Requiere autenticación: No
+    Requiere autenticación: No (pero recomendado)
     """
+    # Si el usuario está autenticado, usar sus datos
+    if current_user:
+        # Verificar que el usuario no tenga ya un rol activo en esta liga
+        from app.models.invitacion import Invitacion
+        invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
+        if not invitacion:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Código no encontrado"
+            )
+
+        # Verificar si el usuario ya tiene un rol activo en esta liga
+        from app.models.usuario_rol import UsuarioRol
+        usuario_rol_activo = db.query(UsuarioRol).filter(
+            UsuarioRol.id_usuario == current_user.id_usuario,
+            UsuarioRol.id_liga == invitacion.id_liga,
+            UsuarioRol.activo == 1
+        ).first()
+
+        if usuario_rol_activo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ya tienes un rol activo en esta liga"
+            )
+
+        # Usar el servicio para asignar el rol al usuario existente
+        try:
+            from app.api.services.invitacion_service import aceptar_invitacion_por_codigo_usuario_existente
+            usuario = aceptar_invitacion_por_codigo_usuario_existente(
+                db=db,
+                codigo=codigo,
+                usuario_id=current_user.id_usuario
+            )
+
+            return {
+                "mensaje": "Código aceptado correctamente. Rol asignado.",
+                "usuario_id": current_user.id_usuario,
+                "email": current_user.email
+            }
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+
+    # Usuario no autenticado - requiere datos de registro
+    if not datos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Se requieren datos de registro (email, password, nombre)"
+        )
+
     # Verificar que el usuario no exista ya
     usuario_existente = db.query(Usuario).filter(Usuario.email == datos.email.lower()).first()
     if usuario_existente:
