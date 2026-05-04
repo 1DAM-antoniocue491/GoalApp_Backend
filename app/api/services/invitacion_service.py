@@ -1,6 +1,9 @@
 """
 Servicio de lógica de negocio para Invitaciones.
 Maneja la creación, validación y aceptación de invitaciones a ligas.
+Soporta dos métodos de invitación:
+- Token UUID (64 chars hex) - enviado por email
+- Código corto (6-8 chars alfanuméricos) - generado sin email
 """
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -16,10 +19,42 @@ from app.models.usuario_rol import UsuarioRol
 from app.api.services.email_service import enviar_email_invitacion
 from app.config import settings
 
+# Importación diferida para evitar circular import
+Jugador = None  # Se importa cuando se necesita
+
 
 def generar_token() -> str:
     """Genera un token seguro aleatorio de 32 bytes (64 caracteres hex)."""
     return secrets.token_hex(32)
+
+
+def generar_codigo_unico(db: Session, longitud: int = 8) -> str:
+    """
+    Genera un código alfanumérico único de 6-8 caracteres (mayúsculas).
+
+    Args:
+        db: Sesión de base de datos
+        longitud: Longitud del código (default: 8)
+
+    Returns:
+        str: Código alfanumérico único
+
+    Raises:
+        ValueError: Si no puede generar un código único tras 10 intentos
+    """
+    import string
+
+    alfabeto = string.ascii_uppercase + string.digits  # A-Z, 0-9
+
+    for _ in range(10):  # Máximo 10 intentos
+        codigo = ''.join(secrets.choice(alfabeto) for _ in range(longitud))
+
+        # Verificar unicidad
+        existente = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
+        if not existente:
+            return codigo
+
+    raise ValueError("No se pudo generar un código único. Intente nuevamente.")
 
 
 def verificar_usuario_existente(db: Session, email: str) -> Optional[Usuario]:
@@ -194,6 +229,202 @@ def crear_invitacion(
         print(f"[ERROR] No se pudo enviar email de invitación: {e}")
 
     return invitacion
+
+
+def generar_codigo_invitacion(
+    db: Session,
+    id_liga: int,
+    id_rol: int,
+    id_equipo: Optional[int] = None,
+    invitado_por: Optional[int] = None,
+    nombre: Optional[str] = None,
+    dorsal: Optional[str] = None,
+    posicion: Optional[str] = None,
+    tipo_jugador: Optional[str] = None
+) -> Invitacion:
+    """
+    Genera un código corto de invitación SIN enviar email.
+
+    Crea una invitación con código alfanumérico único (6-8 caracteres)
+    que puede ser usado UNA sola vez. NO envía email automáticamente.
+
+    Args:
+        db: Sesión de base de datos
+        id_liga: ID de la liga
+        id_rol: ID del rol a asignar
+        id_equipo: ID del equipo (opcional)
+        invitado_por: ID del usuario que genera el código (opcional)
+        nombre: Nombre opcional del invitado
+        dorsal: Dorsal asignado (opcional)
+        posicion: Posición del jugador (opcional)
+        tipo_jugador: Tipo de jugador (opcional)
+
+    Returns:
+        Invitacion: Objeto Invitacion creado con su código
+
+    Raises:
+        ValueError: Si no puede generar un código único
+    """
+    # Generar código único
+    codigo = generar_codigo_unico(db)
+
+    # Calcular fecha de expiración (7 días desde ahora)
+    fecha_expiracion = datetime.utcnow() + timedelta(days=7)
+
+    # Crear invitación con código (email requerido pero puede ser placeholder)
+    invitacion = Invitacion(
+        token=generar_token(),  # Token UUID también se genera para compatibilidad
+        codigo=codigo,
+        email="placeholder@invitacion.codigo",  # Placeholder - no se usa email
+        nombre=nombre,
+        id_liga=id_liga,
+        id_equipo=id_equipo,
+        id_rol=id_rol,
+        dorsal=dorsal,
+        posicion=posicion,
+        tipo_jugador=tipo_jugador,
+        invitado_por=invitado_por,
+        fecha_expiracion=fecha_expiracion,
+        usada=False
+    )
+
+    db.add(invitacion)
+    db.commit()
+    db.refresh(invitacion)
+
+    return invitacion
+
+
+def validar_codigo_invitacion(db: Session, codigo: str) -> Dict[str, Any]:
+    """
+    Valida un código corto de invitación.
+
+    Verifica que el código exista, no esté usado y no haya expirado.
+
+    Args:
+        db: Sesión de base de datos
+        codigo: Código a validar
+
+    Returns:
+        Dict con:
+            - valido (bool): True si es válido
+            - motivo (str): Motivo si no es válido
+            - email, liga_nombre, equipo_nombre, rol, etc. si es válido
+    """
+    # Buscar invitación por código
+    invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
+
+    if not invitacion:
+        return {"valido": False, "motivo": "Código no encontrado"}
+
+    if invitacion.usada:
+        return {"valido": False, "motivo": "Código ya utilizado"}
+
+    if invitacion.fecha_expiracion < datetime.utcnow():
+        return {"valido": False, "motivo": "Código expirado"}
+
+    # Código válido, obtener información adicional
+    liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
+    rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
+    equipo = None
+    if invitacion.id_equipo:
+        equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+
+    return {
+        "valido": True,
+        "email": invitacion.email,
+        "nombre": invitacion.nombre,
+        "liga_nombre": liga.nombre if liga else "Desconocida",
+        "equipo_nombre": equipo.nombre if equipo else None,
+        "rol": rol.nombre if rol else "player",
+        "dorsal": invitacion.dorsal,
+        "posicion": invitacion.posicion,
+        "tipo_jugador": invitacion.tipo_jugador,
+        "id_equipo": invitacion.id_equipo,
+        "fecha_expiracion": invitacion.fecha_expiracion
+    }
+
+
+def aceptar_invitacion_por_codigo(
+    db: Session,
+    codigo: str,
+    email: str,
+    password: str,
+    nombre: str
+) -> Usuario:
+    """
+    Acepta una invitación mediante código corto y crea usuario.
+
+    Valida el código, verifica que el usuario no exista,
+    crea el usuario y asigna el rol.
+
+    Args:
+        db: Sesión de base de datos
+        codigo: Código de la invitación
+        email: Email del usuario
+        password: Contraseña del usuario
+        nombre: Nombre del usuario
+
+    Returns:
+        Usuario: Usuario creado
+
+    Raises:
+        ValueError: Si el código es inválido o usuario ya existe
+    """
+    # Validar código
+    validacion = validar_codigo_invitacion(db, codigo)
+    if not validacion["valido"]:
+        raise ValueError(f"Código inválido: {validacion.get('motivo', 'desconocido')}")
+
+    # Verificar que el usuario no exista ya
+    usuario_existente = db.query(Usuario).filter(Usuario.email == email.lower()).first()
+    if usuario_existente:
+        raise ValueError("El email ya está registrado. Inicia sesión en su lugar.")
+
+    # Obtener invitación completa
+    invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
+    if not invitacion:
+        raise ValueError("Invitación no encontrada")
+
+    # Crear nuevo usuario
+    from app.api.services.usuario_service import hash_password
+    usuario = Usuario(
+        email=email.lower().strip(),
+        password=hash_password(password),
+        nombre=nombre.strip()
+    )
+    db.add(usuario)
+    db.flush()
+
+    # Asignar rol activo
+    usuario_rol = UsuarioRol(
+        id_usuario=usuario.id_usuario,
+        id_rol=invitacion.id_rol,
+        id_liga=invitacion.id_liga,
+        activo=1
+    )
+    db.add(usuario_rol)
+
+    # Si es jugador con equipo, crear entrada
+    if invitacion.id_equipo and invitacion.id_rol:
+        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
+        if rol and rol.nombre == "player":
+            from app.models.jugador import Jugador
+            jugador = Jugador(
+                id_usuario=usuario.id_usuario,
+                id_equipo=invitacion.id_equipo,
+                dorsal=invitacion.dorsal,
+                posicion=invitacion.posicion,
+                tipo_jugador=invitacion.tipo_jugador or "titular"
+            )
+            db.add(jugador)
+
+    # Marcar invitación como usada
+    invitacion.usada = True
+    db.commit()
+    db.refresh(usuario)
+
+    return usuario
 
 
 def validar_token_invitacion(db: Session, token: str) -> Dict[str, Any]:

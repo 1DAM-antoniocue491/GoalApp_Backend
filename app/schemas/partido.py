@@ -35,7 +35,7 @@ class PartidoBase(BaseModel):
     """
     Schema base de Partido con campos comunes.
     Usado como clase base para herencia.
-    
+
     Attributes:
         id_liga (int): ID de la liga a la que pertenece el partido
         id_equipo_local (int): ID del equipo que juega como local
@@ -49,7 +49,7 @@ class PartidoBase(BaseModel):
     id_equipo_local: int
     id_equipo_visitante: int
     fecha: datetime
-    estado: EstadoPartido
+    estado: EstadoPartido = EstadoPartido.programado  # Default para defensive programming
     goles_local: int | None = None  # Inicia en None hasta que se juegue el partido
     goles_visitante: int | None = None  # Inicia en None hasta que se juegue el partido
 

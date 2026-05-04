@@ -9,13 +9,23 @@ from datetime import datetime, timedelta
 
 from app.api.dependencies import get_db, get_current_user, require_role
 from app.models.usuario import Usuario
-from app.schemas.invitacion import InvitacionCreate, InvitacionValidarResponse, InvitacionAceptar
+from app.schemas.invitacion import (
+    InvitacionCreate,
+    InvitacionValidarResponse,
+    InvitacionAceptar,
+    InvitacionCodigoCreate,
+    InvitacionCodigoResponse,
+    InvitacionAceptarCodigo
+)
 from app.api.services.invitacion_service import (
     crear_invitacion,
     validar_token_invitacion,
     aceptar_invitacion,
     aceptar_invitacion_usuario_existente,
-    verificar_usuario_existente
+    verificar_usuario_existente,
+    generar_codigo_invitacion,
+    validar_codigo_invitacion,
+    aceptar_invitacion_por_codigo
 )
 
 # Configuración del router
@@ -440,3 +450,271 @@ def activar_usuario_liga(
         "usuario_id": usuario_id,
         "liga_id": liga_id
     }
+
+
+# ============================================================
+# GENERAR CÓDIGO DE INVITACIÓN (solo admin de la liga)
+# ============================================================
+
+@router.post("/ligas/{liga_id}/generar-codigo", status_code=status.HTTP_201_CREATED, response_model=InvitacionCodigoResponse)
+def generar_codigo_invitacion_endpoint(
+    liga_id: int,
+    datos: InvitacionCodigoCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Genera un código corto de invitación (6-8 caracteres alfanuméricos).
+
+    El código puede usarse UNA sola vez para unirse a la liga con el rol especificado.
+    NO envía email - el código debe compartirse manualmente (chat, QR, etc.).
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - datos (InvitacionCodigoCreate): Rol, equipo, nombre opcional, dorsal, posición, tipo jugador
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado (admin de liga o entrenador)
+
+    Returns:
+        InvitacionCodigoResponse:
+            - codigo (str): Código alfanumérico (6-8 caracteres)
+            - rol (str): Nombre del rol asignado
+            - liga (str): Nombre de la liga
+            - expiracion (datetime): Fecha de expiración
+            - id_equipo (int | None): ID del equipo (si aplica)
+
+    Requiere autenticación: Sí
+    Roles permitidos:
+        - Admin de liga: puede generar código para cualquier rol
+        - Entrenador: solo delegado o jugador para su equipo
+    """
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
+    from app.models.equipo import Equipo
+
+    # Obtener el rol del usuario actual en esta liga
+    usuario_rol_actual = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == current_user.id_usuario,
+        UsuarioRol.id_liga == liga_id,
+        UsuarioRol.activo == 1
+    ).first()
+
+    if not usuario_rol_actual:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes ningún rol en esta liga"
+        )
+
+    # Obtener nombre del rol actual
+    rol_actual = db.query(Rol).filter(Rol.id_rol == usuario_rol_actual.id_rol).first()
+    if not rol_actual:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Rol no válido"
+        )
+
+    # Validar permisos según el rol del usuario que genera el código
+    if rol_actual.nombre == "admin":
+        # Admin puede generar código para cualquier rol
+        pass
+    elif rol_actual.nombre == "coach":
+        # Coach solo puede generar código para delegate o player
+        rol_a_asignar = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+        if not rol_a_asignar:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rol a asignar no válido"
+            )
+        if rol_a_asignar.nombre not in ["delegate", "player"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como entrenador, solo puedes generar códigos para delegados o jugadores"
+            )
+        # Entrenador debe especificar equipo
+        if not datos.id_equipo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debes especificar el equipo para el que se genera el código"
+            )
+        # Validar que el equipo pertenece a esta liga y que el entrenador es de ese equipo
+        equipo = db.query(Equipo).filter(Equipo.id_equipo == datos.id_equipo).first()
+        if not equipo or equipo.id_liga != liga_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El equipo no pertenece a esta liga"
+            )
+        if equipo.id_entrenador != current_user.id_usuario:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo puedes generar códigos para tu propio equipo"
+            )
+    else:
+        # Otros roles no pueden generar códigos
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para generar códigos de invitación"
+        )
+
+    # Validaciones por rol
+    rol_a_asignar = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+    if not rol_a_asignar:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rol a asignar no válido"
+        )
+
+    if rol_a_asignar.nombre in ["admin", "viewer"]:
+        # No requieren equipo
+        pass
+    elif rol_a_asignar.nombre == "coach":
+        if not datos.id_equipo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El entrenador debe tener un equipo asignado"
+            )
+    elif rol_a_asignar.nombre in ["delegate", "player"]:
+        if not datos.id_equipo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Este rol requiere un equipo asignado"
+            )
+        if rol_a_asignar.nombre == "player":
+            if not datos.dorsal:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El jugador debe tener un dorsal asignado"
+                )
+            if not datos.posicion:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El jugador debe tener una posición asignada"
+                )
+
+    # Generar código de invitación
+    invitacion = generar_codigo_invitacion(
+        db=db,
+        id_liga=liga_id,
+        id_rol=datos.id_rol,
+        id_equipo=datos.id_equipo,
+        invitado_por=current_user.id_usuario,
+        nombre=datos.nombre,
+        dorsal=datos.dorsal,
+        posicion=datos.posicion,
+        tipo_jugador=datos.tipo_jugador
+    )
+
+    # Obtener nombres para la respuesta
+    liga = db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    rol = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+
+    return InvitacionCodigoResponse(
+        codigo=invitacion.codigo,
+        rol=rol.nombre if rol else "player",
+        liga=liga.nombre if liga else "Liga",
+        expiracion=invitacion.fecha_expiracion,
+        id_equipo=datos.id_equipo
+    )
+
+
+# ============================================================
+# VALIDAR CÓDIGO DE INVITACIÓN
+# ============================================================
+
+@router.get("/validar-codigo/{codigo}", response_model=InvitacionValidarResponse)
+def validar_codigo_invitacion_endpoint(
+    codigo: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Validar un código corto de invitación.
+
+    Verifica si el código existe, no está usado y no ha expirado.
+
+    Parámetros:
+        - codigo (str): Código de invitación a validar (6-8 caracteres)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        InvitacionValidarResponse:
+            - valido (bool): True si el código es válido
+            - liga_nombre (str): Nombre de la liga (si es válido)
+            - equipo_nombre (str): Nombre del equipo (si es válido)
+            - rol (str): Nombre del rol (si es válido)
+            - motivo (str): Motivo por el que no es válido (si no lo es)
+
+    Requiere autenticación: No
+    """
+    resultado = validar_codigo_invitacion(db, codigo)
+
+    if not resultado["valido"]:
+        return InvitacionValidarResponse(
+            valido=False,
+            motivo=resultado.get("motivo", "Código inválido")
+        )
+
+    return InvitacionValidarResponse(
+        valido=True,
+        email=resultado["email"],
+        liga_nombre=resultado["liga_nombre"],
+        equipo_nombre=resultado.get("equipo_nombre"),
+        rol=resultado["rol"],
+        dorsal=resultado.get("dorsal"),
+        posicion=resultado.get("posicion"),
+        tipo_jugador=resultado.get("tipo_jugador")
+    )
+
+
+# ============================================================
+# ACEPTAR INVITACIÓN POR CÓDIGO (registro)
+# ============================================================
+
+@router.post("/aceptar-codigo/{codigo}")
+def aceptar_invitacion_por_codigo_endpoint(
+    codigo: str,
+    datos: InvitacionAceptarCodigo,
+    db: Session = Depends(get_db)
+):
+    """
+    Aceptar una invitación mediante código corto.
+
+    Valida el código y crea un nuevo usuario con los datos proporcionados.
+    El código solo puede usarse UNA vez.
+
+    Parámetros:
+        - codigo (str): Código de invitación (6-8 caracteres)
+        - datos (InvitacionAceptarCodigo): Email, contraseña, nombre
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        dict: Mensaje de confirmación con usuario_id y email
+
+    Requiere autenticación: No
+    """
+    # Verificar que el usuario no exista ya
+    usuario_existente = db.query(Usuario).filter(Usuario.email == datos.email.lower()).first()
+    if usuario_existente:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El email ya está registrado. Inicia sesión en su lugar."
+        )
+
+    # Aceptar invitación y crear usuario
+    try:
+        usuario = aceptar_invitacion_por_codigo(
+            db=db,
+            codigo=codigo,
+            email=datos.email,
+            password=datos.password,
+            nombre=datos.nombre
+        )
+
+        return {
+            "mensaje": "Código aceptado correctamente. Usuario creado.",
+            "usuario_id": usuario.id_usuario,
+            "email": usuario.email
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )

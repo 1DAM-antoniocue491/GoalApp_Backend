@@ -18,7 +18,8 @@ class Invitacion(Base):
 
     Attributes:
         id_invitacion (int): Identificador único de la invitación (Primary Key)
-        token (str): Token único y seguro para la invitación
+        token (str): Token único y seguro para la invitación (UUID hex)
+        codigo (str): Código corto alfanumérico (6-8 chars, nullable, unique)
         email (str): Email del usuario invitado
         nombre (str): Nombre completo del usuario invitado
         id_liga (int): ID de la liga (Foreign Key)
@@ -40,6 +41,7 @@ class Invitacion(Base):
 
     # Token y email
     token = Column(String(64), nullable=False, unique=True, index=True)
+    codigo = Column(String(8), nullable=True, unique=True, index=True)  # Código corto alfanumérico (6-8 chars)
     email = Column(String(120), nullable=False, index=True)
     nombre = Column(String(100), nullable=True)  # Nombre completo del invitado
 
