@@ -37,3 +37,6 @@ htmlcov/
 
 # Alembic
 alembic/versions/__pycache__/
+
+# Uploaded files (no persistir en Git)
+uploads/

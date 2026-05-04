@@ -83,7 +83,10 @@ class Settings(BaseSettings):
     # ============================================================
     # ALMACENAMIENTO DE IMÁGENES
     # ============================================================
-    UPLOAD_DIR: str = "uploads"  # Directorio para almacenar imágenes
+    # Directorio para almacenar imágenes (ruta absoluta basada en el directorio del proyecto)
+    UPLOAD_DIR: str = "uploads"
+    # URL base para servir imágenes (dejar vacío para usar ruta relativa /uploads)
+    UPLOAD_URL: str = ""
     MAX_IMAGE_SIZE: int = 5 * 1024 * 1024  # 5MB máximo
     ALLOWED_IMAGE_TYPES: str = "image/jpeg,image/png,image/webp"
     

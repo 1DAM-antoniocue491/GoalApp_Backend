@@ -3,7 +3,9 @@
 Punto de entrada principal de la aplicación FastAPI.
 Configura la aplicación, middlewares, routers y eventos de ciclo de vida.
 """
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -120,6 +122,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============================================================
+# ARCHIVOS ESTÁTICOS (UPLOADS)
+# ============================================================
+# Crear directorio de uploads si no existe (usar ruta absoluta)
+upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), settings.UPLOAD_DIR)
+os.makedirs(upload_dir, exist_ok=True)
+# Montar directorio de uploads para servir archivos estáticos
+app.mount("/uploads", StaticFiles(directory=upload_dir), name="uploads")
 
 
 # ============================================================

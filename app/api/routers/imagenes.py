@@ -4,11 +4,12 @@ Router de Imágenes - Gestión de subida y recuperación de imágenes.
 Endpoints para subir y obtener imágenes de usuarios y equipos.
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, get_current_user
-from app.api.services.imagen_service import save_image, delete_image, get_image_path
+from app.api.services.imagen_service import delete_image, get_image_path
+from app.api.services.supabase_storage_service import get_storage_service
 from app.api.services.usuario_service import actualizar_usuario
 from app.config import settings
 
@@ -40,26 +41,28 @@ async def subir_imagen_usuario(
         - current_user: Usuario autenticado
 
     Returns:
-        dict: URL de la imagen guardada
+        dict: URL pública de la imagen guardada en Supabase Storage
 
     Requiere autenticación: Sí
     """
     # Verificar que el usuario puede modificar su propia imagen
-    # (el propio usuario o un admin)
     if current_user.id_usuario != usuario_id:
-        # Verificar si es admin
         es_admin = any(rol.nombre == "admin" for rol in current_user.roles)
         if not es_admin:
             raise HTTPException(403, "No tienes permiso para modificar esta imagen")
 
-    # Guardar imagen
-    image_url = await save_image(file, subfolder="usuarios")
+    # Subir a Supabase Storage
+    storage_service = get_storage_service()
+    result = await storage_service.upload_file(file, "usuarios", usuario_id)
 
-    # Actualizar usuario con la nueva imagen
+    if not result["success"]:
+        raise HTTPException(500, f"Error al subir imagen: {result['error']}")
+
+    # Actualizar usuario con la URL pública
     from app.schemas.usuario import UsuarioUpdate
-    actualizar_usuario(db, usuario_id, UsuarioUpdate(imagen_url=image_url))
+    actualizar_usuario(db, usuario_id, UsuarioUpdate(imagen_url=result["public_url"]))
 
-    return {"imagen_url": image_url}
+    return {"imagen_url": result["public_url"]}
 
 
 @router.post("/equipos/{equipo_id}", summary="Subir escudo de equipo")
@@ -81,7 +84,7 @@ async def subir_imagen_equipo(
         - current_user: Usuario autenticado
 
     Returns:
-        dict: URL de la imagen guardada
+        dict: URL pública de la imagen guardada en Supabase Storage
 
     Requiere autenticación: Sí
     """
@@ -98,14 +101,18 @@ async def subir_imagen_equipo(
         if equipo.id_entrenador != current_user.id_usuario and equipo.id_delegado != current_user.id_usuario:
             raise HTTPException(403, "No tienes permiso para modificar este equipo")
 
-    # Guardar imagen
-    image_url = await save_image(file, subfolder="equipos")
+    # Subir a Supabase Storage
+    storage_service = get_storage_service()
+    result = await storage_service.upload_file(file, "equipos", equipo_id)
 
-    # Actualizar equipo con el nuevo escudo
-    equipo.escudo = image_url
+    if not result["success"]:
+        raise HTTPException(500, f"Error al subir imagen: {result['error']}")
+
+    # Actualizar equipo con la URL pública
+    equipo.escudo = result["public_url"]
     db.commit()
 
-    return {"imagen_url": image_url}
+    return {"imagen_url": result["public_url"]}
 
 
 @router.post("/ligas/{liga_id}", summary="Subir logo de liga")
@@ -127,7 +134,7 @@ async def subir_imagen_liga(
         - current_user: Usuario autenticado
 
     Returns:
-        dict: URL de la imagen guardada
+        dict: URL pública de la imagen guardada en Supabase Storage
 
     Requiere autenticación: Sí
     """
@@ -150,14 +157,18 @@ async def subir_imagen_liga(
         if not usuario_rol:
             raise HTTPException(403, "No tienes permiso para modificar esta liga")
 
-    # Guardar imagen
-    image_url = await save_image(file, subfolder="ligas")
+    # Subir a Supabase Storage
+    storage_service = get_storage_service()
+    result = await storage_service.upload_file(file, "ligas", liga_id)
 
-    # Actualizar liga con el nuevo logo
-    liga.logo_url = image_url
+    if not result["success"]:
+        raise HTTPException(500, f"Error al subir imagen: {result['error']}")
+
+    # Actualizar liga con la URL pública
+    liga.logo_url = result["public_url"]
     db.commit()
 
-    return {"imagen_url": image_url}
+    return {"imagen_url": result["public_url"]}
 
 
 @router.get("/{subfolder}/{filename}", summary="Obtener imagen")
@@ -166,24 +177,26 @@ async def obtener_imagen(
     filename: str
 ):
     """
-    Obtiene una imagen almacenada en el servidor.
+    Obtiene la URL pública de una imagen almacenada en Supabase Storage.
 
     Parámetros:
         - subfolder (str): Subcarpeta (usuarios, equipos)
         - filename (str): Nombre del archivo
 
     Returns:
-        FileResponse: Archivo de imagen
+        dict: URL pública de la imagen
 
     Requiere autenticación: No
     """
-    image_url = f"/uploads/{subfolder}/{filename}"
-    filepath = get_image_path(image_url)
+    # Construir path relativo y obtener URL pública
+    file_path = f"{subfolder}/{filename}"
+    storage_service = get_storage_service()
+    public_url = storage_service.get_public_url(file_path)
 
-    if not filepath:
+    if not public_url:
         raise HTTPException(404, "Imagen no encontrada")
 
-    return FileResponse(filepath)
+    return JSONResponse(content={"url": public_url})
 
 
 @router.delete("/usuarios/{usuario_id}", summary="Eliminar imagen de perfil")
@@ -220,9 +233,10 @@ async def eliminar_imagen_usuario(
     if not usuario:
         raise HTTPException(404, "Usuario no encontrado")
 
-    # Eliminar archivo
+    # Eliminar de Supabase Storage
     if usuario.imagen_url:
-        delete_image(usuario.imagen_url)
+        storage_service = get_storage_service()
+        storage_service.delete_file(usuario.imagen_url)
         usuario.imagen_url = None
         db.commit()
 

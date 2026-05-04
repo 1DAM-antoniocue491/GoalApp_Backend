@@ -16,6 +16,10 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 # Tipos MIME permitidos
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
+# Ruta absoluta al directorio de uploads (basada en la ubicación de este archivo)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+UPLOAD_DIR_ABS = os.path.join(BASE_DIR, settings.UPLOAD_DIR)
+
 
 def ensure_upload_dir() -> str:
     """
@@ -24,7 +28,7 @@ def ensure_upload_dir() -> str:
     Returns:
         str: Ruta al directorio de uploads
     """
-    upload_dir = settings.UPLOAD_DIR
+    upload_dir = UPLOAD_DIR_ABS
     if not os.path.exists(upload_dir):
         os.makedirs(upload_dir)
     return upload_dir
@@ -125,7 +129,7 @@ def delete_image(image_url: str) -> bool:
     try:
         # Convertir URL a ruta del sistema
         filepath = image_url.lstrip("/uploads/")
-        filepath = os.path.join(settings.UPLOAD_DIR, filepath)
+        filepath = os.path.join(UPLOAD_DIR_ABS, filepath)
 
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -151,7 +155,7 @@ def get_image_path(image_url: str) -> str | None:
 
     try:
         filepath = image_url.lstrip("/uploads/")
-        filepath = os.path.join(settings.UPLOAD_DIR, filepath)
+        filepath = os.path.join(UPLOAD_DIR_ABS, filepath)
 
         if os.path.exists(filepath):
             return filepath
