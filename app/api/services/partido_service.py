@@ -209,22 +209,27 @@ def obtener_partidos_por_jornada(db: Session, liga_id: int):
     EquipoVisitante = aliased(Equipo)
 
     # Consulta con joins explícitos usando aliases para evitar conflicto de tablas
+    # Incluir Jornada para obtener el campo 'numero' real
     query = db.query(
         Partido,
         EquipoLocal,
-        EquipoVisitante
+        EquipoVisitante,
+        Jornada
     ).outerjoin(
         EquipoLocal, Partido.id_equipo_local == EquipoLocal.id_equipo
     ).outerjoin(
         EquipoVisitante, Partido.id_equipo_visitante == EquipoVisitante.id_equipo
+    ).outerjoin(
+        Jornada, Partido.id_jornada == Jornada.id_jornada
     ).filter(Partido.id_liga == liga_id)
 
     resultados_query = query.all()
 
-    # Agrupar por jornada
+    # Agrupar por jornada usando el campo 'numero' real de la jornada
     jornadas_dict = {}
-    for partido, equipo_local, equipo_visitante in resultados_query:
-        jornada_num = partido.id_jornada or 1
+    for partido, equipo_local, equipo_visitante, jornada in resultados_query:
+        # Usar el campo 'numero' de la jornada (1, 2, 3...) en lugar del id_jornada autoincremental
+        jornada_num = jornada.numero if jornada else (partido.id_jornada or 1)
         if jornada_num not in jornadas_dict:
             jornadas_dict[jornada_num] = []
 

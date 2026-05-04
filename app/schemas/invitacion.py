@@ -128,10 +128,10 @@ class InvitacionAceptarCodigo(BaseModel):
     Se usa en el endpoint POST /invitaciones/aceptar-codigo/{codigo}.
 
     Attributes:
-        email (EmailStr): Email del usuario
-        password (str): Contraseña del usuario (mínimo 6 caracteres)
-        nombre (str): Nombre del usuario
+        email (EmailStr): Email del usuario (requerido si no autenticado)
+        password (str): Contraseña del usuario (mínimo 6 caracteres, requerido si no autenticado)
+        nombre (str): Nombre del usuario (requerido si no autenticado)
     """
-    email: EmailStr
-    password: str = Field(..., min_length=6)
-    nombre: str = Field(..., min_length=2, max_length=100)
+    email: Optional[EmailStr] = None
+    password: Optional[str] = Field(None, min_length=6)
+    nombre: Optional[str] = Field(None, min_length=2, max_length=100)

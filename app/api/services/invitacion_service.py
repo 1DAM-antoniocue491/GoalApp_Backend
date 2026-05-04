@@ -431,6 +431,99 @@ def aceptar_invitacion_por_codigo(
     return usuario
 
 
+def aceptar_invitacion_por_codigo_usuario_existente(
+    db: Session,
+    codigo: str,
+    usuario_id: int
+) -> Usuario:
+    """
+    Acepta una invitación mediante código corto cuando el usuario ya tiene cuenta.
+
+    Valida el código y asigna el rol al usuario existente.
+
+    Args:
+        db: Sesión de base de datos
+        codigo: Código de la invitación
+        usuario_id: ID del usuario existente
+
+    Returns:
+        Usuario: Usuario con el rol asignado
+
+    Raises:
+        ValueError: Si el código es inválido o el usuario ya tiene rol activo
+    """
+    # Validar código
+    validacion = validar_codigo_invitacion(db, codigo)
+    if not validacion["valido"]:
+        raise ValueError(f"Código inválido: {validacion.get('motivo', 'desconocido')}")
+
+    # Obtener invitación completa
+    invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
+    if not invitacion:
+        raise ValueError("Invitación no encontrada")
+
+    # Obtener usuario
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    if not usuario:
+        raise ValueError("Usuario no encontrado")
+
+    # Verificar si el usuario ya tiene un rol activo en esta liga
+    usuario_rol_activo = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == invitacion.id_liga,
+        UsuarioRol.activo == 1
+    ).first()
+
+    if usuario_rol_activo:
+        raise ValueError("Ya tienes un rol activo en esta liga")
+
+    # Verificar si existe asignación (activa o no) en esta liga
+    asignacion_existente = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == invitacion.id_liga
+    ).first()
+
+    if asignacion_existente:
+        # Actualizar al rol de la invitación y activar
+        asignacion_existente.id_rol = invitacion.id_rol
+        asignacion_existente.activo = 1
+    else:
+        # Crear nueva asignación activa con el rol de la invitación
+        usuario_rol = UsuarioRol(
+            id_usuario=usuario_id,
+            id_rol=invitacion.id_rol,
+            id_liga=invitacion.id_liga,
+            activo=1
+        )
+        db.add(usuario_rol)
+
+    # Si hay equipo, crear jugador si es rol player
+    if invitacion.id_equipo and invitacion.id_rol:
+        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
+        if rol and rol.nombre == "player":
+            # Crear jugador asociado al equipo
+            global Jugador
+            if Jugador is None:
+                from app.models.jugador import Jugador
+            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
+            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
+            jugador = Jugador(
+                id_usuario=usuario_id,
+                id_equipo=invitacion.id_equipo,
+                dorsal=dorsal_int,
+                posicion=invitacion.posicion,
+                tipo_jugador=invitacion.tipo_jugador or "titular"
+            )
+            db.add(jugador)
+
+    # Marcar invitación como usada
+    invitacion.usada = True
+    db.commit()
+    db.refresh(usuario)
+
+    return usuario
+
+
 def validar_token_invitacion(db: Session, token: str) -> Dict[str, Any]:
     """
     Valida un token de invitación.
