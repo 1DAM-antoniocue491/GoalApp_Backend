@@ -198,7 +198,9 @@ CREATE TABLE tokens_recuperacion (
 CREATE TABLE invitaciones (
     id_invitacion SERIAL PRIMARY KEY,
     token VARCHAR(64) NOT NULL UNIQUE,
+    codigo VARCHAR(8) UNIQUE,
     email VARCHAR(120) NOT NULL,
+    nombre VARCHAR(100),
     id_liga INT NOT NULL,
     id_equipo INT,
     id_rol INT NOT NULL,
@@ -218,6 +220,7 @@ CREATE TABLE invitaciones (
 
 CREATE INDEX idx_invitaciones_token ON invitaciones(token);
 CREATE INDEX idx_invitaciones_email ON invitaciones(email);
+CREATE INDEX idx_invitaciones_codigo ON invitaciones(codigo);
 
 -- Datos iniciales
 

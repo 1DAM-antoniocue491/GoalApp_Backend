@@ -127,10 +127,12 @@ def asignar_rol_directamente(
             Jugador.id_equipo == id_equipo
         ).first()
         if not jugador_existente:
+            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
+            dorsal_int = int(dorsal) if dorsal else None
             jugador = Jugador(
                 id_usuario=id_usuario,
                 id_equipo=id_equipo,
-                dorsal=dorsal,
+                dorsal=dorsal_int,
                 posicion=posicion,
                 tipo_jugador=tipo_jugador or "titular"
             )
@@ -410,10 +412,12 @@ def aceptar_invitacion_por_codigo(
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
             from app.models.jugador import Jugador
+            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
+            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
             jugador = Jugador(
                 id_usuario=usuario.id_usuario,
                 id_equipo=invitacion.id_equipo,
-                dorsal=invitacion.dorsal,
+                dorsal=dorsal_int,
                 posicion=invitacion.posicion,
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )
@@ -545,10 +549,12 @@ def aceptar_invitacion(
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
+            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
+            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
             jugador = Jugador(
                 id_usuario=usuario.id_usuario,
                 id_equipo=invitacion.id_equipo,
-                dorsal=invitacion.dorsal,
+                dorsal=dorsal_int,
                 posicion=invitacion.posicion,
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )
@@ -645,10 +651,12 @@ def aceptar_invitacion_usuario_existente(
         if rol and rol.nombre == "player":
             # Crear jugador asociado al equipo
             from app.models.jugador import Jugador
+            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
+            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
             jugador = Jugador(
                 id_usuario=usuario_id,
                 id_equipo=invitacion.id_equipo,
-                dorsal=invitacion.dorsal,
+                dorsal=dorsal_int,
                 posicion=invitacion.posicion,
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )

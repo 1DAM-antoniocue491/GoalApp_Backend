@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from app.api.dependencies import get_db, get_current_user, require_role
 from app.models.usuario import Usuario
+from app.models.liga import Liga
 from app.schemas.invitacion import (
     InvitacionCreate,
     InvitacionValidarResponse,
