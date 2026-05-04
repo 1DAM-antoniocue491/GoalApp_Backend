@@ -6,7 +6,7 @@ Soporta dos métodos de invitación:
 - Código corto (6-8 chars alfanuméricos) - generado sin email
 """
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 from typing import Optional, Dict, Any
 
@@ -177,7 +177,7 @@ def crear_invitacion(
     token = generar_token()
 
     # Calcular fecha de expiración (7 días desde ahora)
-    fecha_expiracion = datetime.utcnow() + timedelta(days=7)
+    fecha_expiracion = datetime.now(timezone.utc) + timedelta(days=7)
 
     # Crear invitación
     invitacion = Invitacion(
@@ -271,7 +271,7 @@ def generar_codigo_invitacion(
     codigo = generar_codigo_unico(db)
 
     # Calcular fecha de expiración (7 días desde ahora)
-    fecha_expiracion = datetime.utcnow() + timedelta(days=7)
+    fecha_expiracion = datetime.now(timezone.utc) + timedelta(days=7)
 
     # Crear invitación con código (email requerido pero puede ser placeholder)
     invitacion = Invitacion(
@@ -322,7 +322,7 @@ def validar_codigo_invitacion(db: Session, codigo: str) -> Dict[str, Any]:
     if invitacion.usada:
         return {"valido": False, "motivo": "Código ya utilizado"}
 
-    if invitacion.fecha_expiracion < datetime.utcnow():
+    if invitacion.fecha_expiracion < datetime.now(timezone.utc):
         return {"valido": False, "motivo": "Código expirado"}
 
     # Código válido, obtener información adicional
@@ -456,7 +456,7 @@ def validar_token_invitacion(db: Session, token: str) -> Dict[str, Any]:
     if invitacion.usada:
         return {"valido": False, "motivo": "Invitación ya utilizada"}
 
-    if invitacion.fecha_expiracion < datetime.utcnow():
+    if invitacion.fecha_expiracion < datetime.now(timezone.utc):
         return {"valido": False, "motivo": "Invitación expirada"}
 
     # Token válido, obtener información adicional

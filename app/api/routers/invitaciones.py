@@ -719,3 +719,76 @@ def aceptar_invitacion_por_codigo_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+# ============================================================
+# ELIMINAR CÓDIGO DE INVITACIÓN (solo admin de la liga)
+# ============================================================
+
+@router.delete("/ligas/{liga_id}/codigos/{codigo}")
+def eliminar_codigo_invitacion(
+    liga_id: int,
+    codigo: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Eliminar/invalidar un código de invitación.
+
+    Marca el código como usado para que no pueda utilizarse.
+
+    Parámetros:
+        - liga_id (int): ID de la liga
+        - codigo (str): Código a eliminar
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado (debe ser admin)
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin de la liga
+    """
+    from app.models.usuario_rol import UsuarioRol
+
+    # Verificar que el usuario actual es admin de la liga
+    usuario_rol_actual = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == current_user.id_usuario,
+        UsuarioRol.id_liga == liga_id,
+        UsuarioRol.activo == 1
+    ).first()
+
+    if not usuario_rol_actual:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes ningún rol en esta liga"
+        )
+
+    # Obtener el rol del usuario actual
+    rol_actual = db.query(Rol).filter(Rol.id_rol == usuario_rol_actual.id_rol).first()
+    if not rol_actual or rol_actual.nombre != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los administradores pueden eliminar códigos"
+        )
+
+    # Buscar la invitación por código
+    invitacion = db.query(Invitacion).filter(
+        Invitacion.codigo == codigo,
+        Invitacion.id_liga == liga_id
+    ).first()
+
+    if not invitacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Código no encontrado"
+        )
+
+    # Marcar como usada (invalidar)
+    invitacion.usada = True
+    db.commit()
+
+    return {
+        "mensaje": "Código eliminado correctamente",
+        "codigo": codigo
+    }
