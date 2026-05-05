@@ -508,7 +508,10 @@ def obtener_plantilla_equipo(db: Session, equipo_id: int):
     jugadores = db.query(
         Jugador,
         Usuario,
-        stats_subquery,
+        stats_subquery.c.goles,
+        stats_subquery.c.asistencias,
+        stats_subquery.c.amarillas,
+        stats_subquery.c.rojas,
         partidos_jugados_subquery.c.partidos
     ).join(
         Usuario, Jugador.id_usuario == Usuario.id_usuario
@@ -525,7 +528,7 @@ def obtener_plantilla_equipo(db: Session, equipo_id: int):
     ).all()
 
     resultados = []
-    for jugador, usuario, stats, partidos_jugados in jugadores:
+    for jugador, usuario, goles, asistencias, amarillas, rojas, partidos_jugados in jugadores:
         resultados.append({
             "id_jugador": jugador.id_jugador,
             "id_usuario": jugador.id_usuario,
@@ -534,10 +537,10 @@ def obtener_plantilla_equipo(db: Session, equipo_id: int):
             "dorsal": jugador.dorsal,
             "activo": jugador.activo,
             "nombre": usuario.nombre,
-            "goles": stats.goles if stats else 0,
-            "asistencias": stats.asistencias if stats else 0,
-            "tarjetas_amarillas": stats.amarillas if stats else 0,
-            "tarjetas_rojas": stats.rojas if stats else 0,
+            "goles": goles or 0,
+            "asistencias": asistencias or 0,
+            "tarjetas_amarillas": amarillas or 0,
+            "tarjetas_rojas": rojas or 0,
             "partidos_jugados": partidos_jugados or 0,
             "rating": 0,  # Se puede calcular basado en rendimiento
         })

@@ -11,6 +11,7 @@ from app.models.usuario_rol import UsuarioRol
 from app.models.rol import Rol
 from app.models.estado_jugador_partido import EstadoJugadorPartido
 from app.models.equipo import Equipo
+from app.models.jugador import Jugador
 from app.schemas.eventos import EventoPartidoCreate
 
 
@@ -81,6 +82,67 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     db.add(evento)
     db.commit()
     db.refresh(evento)
+
+    # === TRIGGER DE NOTIFICACIÓN DE GOL ===
+    if datos.tipo_evento == "GOL":
+        # Obtener info del jugador y equipo
+        jugador = db.query(Jugador).filter(
+            Jugador.id_jugador == datos.id_jugador
+        ).first()
+
+        if jugador:
+            equipo = db.query(Equipo).filter(
+                Equipo.id_equipo == jugador.id_equipo
+            ).first()
+
+            if equipo:
+                titulo = f"¡GOL DE {equipo.nombre.upper()}!"
+                mensaje = f"{jugador.usuario.nombre} marca gol en el minuto {datos.minuto}"
+
+                # Notificar a seguidores de la liga
+                from app.api.services.notificacion_service import notificar_seguidores_liga
+                notificar_seguidores_liga(
+                    db=db,
+                    id_liga=partido.id_liga,
+                    tipo="gol",
+                    titulo=titulo,
+                    mensaje=mensaje,
+                    id_referencia=partido.id_partido,
+                    tipo_referencia="partido"
+                )
+
+    # === TRIGGER DE NOTIFICACIÓN DE SUSTITUCIÓN ===
+    if datos.tipo_evento == "cambio":
+        # Obtener info del jugador que sale y el que entra
+        jugador_entra = db.query(Jugador).filter(
+            Jugador.id_jugador == datos.id_jugador
+        ).options(joinedload(Jugador.usuario)).first()
+        jugador_sale = db.query(Jugador).filter(
+            Jugador.id_jugador == datos.id_jugador_sale
+        ).options(joinedload(Jugador.usuario)).first() if datos.id_jugador_sale else None
+
+        if jugador_entra and jugador_sale:
+            # Ambos jugadores son del mismo equipo (ya validado en _validar_sustitucion)
+            equipo = db.query(Equipo).filter(
+                Equipo.id_equipo == jugador_entra.id_equipo
+            ).first()
+
+            if equipo:
+                titulo = f"Sustitución en {equipo.nombre}"
+                mensaje = f"Sale {jugador_sale.usuario.nombre}, entra {jugador_entra.usuario.nombre} (min {datos.minuto})"
+
+                # Notificar a todos los miembros del equipo
+                from app.api.services.notificacion_service import notificar_equipo
+                notificar_equipo(
+                    db=db,
+                    id_equipo=equipo.id_equipo,
+                    tipo="sustitucion",
+                    titulo=titulo,
+                    mensaje=mensaje,
+                    id_referencia=partido.id_partido,
+                    tipo_referencia="partido",
+                    excluir_ids={usuario_id}  # Excluir al delegado que hizo la acción
+                )
 
     # Si es sustitución, actualizar estados después de crear el evento
     if datos.tipo_evento == "cambio" and datos.id_jugador_sale:

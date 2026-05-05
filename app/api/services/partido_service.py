@@ -18,6 +18,7 @@ from app.models.jugador import Jugador
 from app.models.evento_partido import EventoPartido
 from app.models.estado_jugador_partido import EstadoJugadorPartido
 from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest, FinalizarPartidoRequest
+from app.api.services.notificacion_service import notificar_usuarios_liga
 
 
 def crear_partido(db: Session, datos: PartidoCreate):
@@ -795,6 +796,17 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     db.commit()
     db.refresh(partido)
 
+    # Notificar a usuarios de la liga
+    notificar_usuarios_liga(
+        db=db,
+        id_liga=partido.id_liga,
+        tipo="partido_iniciado",
+        titulo="Partido Iniciado",
+        mensaje=f"{partido.equipo_local.nombre} vs {partido.equipo_visitante.nombre} — ¡El partido ha comenzado!",
+        id_referencia=partido.id_partido,
+        tipo_referencia="partido"
+    )
+
     return partido
 
 
@@ -897,5 +909,16 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
     db.add(mvp_evento)
     db.commit()
     db.refresh(partido)
+
+    # Notificar a usuarios de la liga con el resultado final
+    notificar_usuarios_liga(
+        db=db,
+        id_liga=partido.id_liga,
+        tipo="partido_finalizado",
+        titulo="Partido Finalizado",
+        mensaje=f"{partido.equipo_local.nombre} {partido.goles_local} - {partido.goles_visitante} {partido.equipo_visitante.nombre}",
+        id_referencia=partido.id_partido,
+        tipo_referencia="partido"
+    )
 
     return partido

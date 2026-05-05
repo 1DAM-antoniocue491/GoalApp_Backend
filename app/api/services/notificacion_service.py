@@ -6,6 +6,7 @@ crear, marcar como leídas y eliminar notificaciones.
 from sqlalchemy.orm import Session
 from app.models.notificacion import Notificacion
 from app.schemas.notificacion import NotificacionCreate
+from app.models.usuario_rol import UsuarioRol
 
 
 def obtener_notificaciones_usuario(db: Session, usuario_id: int):
@@ -129,6 +130,120 @@ def notificar_seguidores_liga(db: Session, id_liga: int, tipo: str, titulo: str,
     for seguidor in seguidores:
         notificaciones_data.append({
             "id_usuario": seguidor.id_usuario,
+            "tipo": tipo,
+            "titulo": titulo,
+            "mensaje": mensaje,
+            "leida": False,
+            "id_referencia": id_referencia if id_referencia else id_liga,
+            "tipo_referencia": tipo_referencia
+        })
+
+    return crear_notificaciones_masivas(db, notificaciones_data)
+
+
+def notificar_equipo(db: Session, id_equipo: int, tipo: str, titulo: str, mensaje: str,
+                     id_referencia: int = None, tipo_referencia: str = "equipo",
+                     excluir_ids: set = None):
+    """
+    Notifica a todos los miembros de un equipo (jugadores + entrenador + delegado).
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        id_equipo (int): ID del equipo
+        tipo (str): Tipo de notificación
+        titulo (str): Título
+        mensaje (str): Mensaje
+        id_referencia (int | None): ID de referencia opcional
+        tipo_referencia (str): Tipo de referencia
+        excluir_ids (set | None): Set de IDs de usuario a excluir
+
+    Returns:
+        int: Número de notificaciones creadas
+    """
+    from app.models.jugador import Jugador
+    from app.models.equipo import Equipo
+
+    # Obtener el equipo
+    equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
+    if not equipo:
+        return 0
+
+    # Recopilar todos los IDs de usuario del equipo
+    ids_usuario = set()
+
+    # Añadir entrenador
+    if equipo.id_entrenador:
+        ids_usuario.add(equipo.id_entrenador)
+
+    # Añadir delegado
+    if equipo.id_delegado:
+        ids_usuario.add(equipo.id_delegado)
+
+    # Añadir todos los jugadores
+    jugadores = db.query(Jugador).filter(Jugador.id_equipo == id_equipo).all()
+    for jugador in jugadores:
+        if jugador.id_usuario:
+            ids_usuario.add(jugador.id_usuario)
+
+    # Excluir IDs especificados
+    if excluir_ids:
+        ids_usuario -= excluir_ids
+
+    if not ids_usuario:
+        return 0
+
+    # Preparar datos para bulk insert
+    notificaciones_data = []
+    for id_usuario in ids_usuario:
+        notificaciones_data.append({
+            "id_usuario": id_usuario,
+            "tipo": tipo,
+            "titulo": titulo,
+            "mensaje": mensaje,
+            "leida": False,
+            "id_referencia": id_referencia,
+            "tipo_referencia": tipo_referencia
+        })
+
+    return crear_notificaciones_masivas(db, notificaciones_data)
+
+
+def notificar_usuarios_liga(db: Session, id_liga: int, tipo: str, titulo: str,
+                            mensaje: str, id_referencia: int = None,
+                            tipo_referencia: str = "liga", excluir_ids: set = None):
+    """
+    Notifica a todos los usuarios con rol en una liga (usuario_rol).
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        id_liga (int): ID de la liga
+        tipo (str): Tipo de notificación
+        titulo (str): Título de la notificación
+        mensaje (str): Contenido del mensaje
+        id_referencia (int | None): ID de la referencia opcional
+        tipo_referencia (str): Tipo de referencia ("liga", "partido", etc.)
+        excluir_ids (set | None): Set de IDs de usuario a excluir
+
+    Returns:
+        int: Número de notificaciones creadas
+    """
+    # Obtener todos los usuarios con rol en la liga
+    usuarios_rol = db.query(UsuarioRol).filter(
+        UsuarioRol.id_liga == id_liga
+    ).all()
+
+    if not usuarios_rol:
+        return 0
+
+    # Preparar datos para bulk insert
+    notificaciones_data = []
+    for usuario_rol in usuarios_rol:
+        # Excluir usuarios específicos si se proporcionan
+        if excluir_ids and usuario_rol.id_usuario in excluir_ids:
+            continue
+
+        notificaciones_data.append({
+            "id_usuario": usuario_rol.id_usuario,
             "tipo": tipo,
             "titulo": titulo,
             "mensaje": mensaje,

@@ -294,3 +294,42 @@ def obtener_usuarios_con_rol(
     Roles permitidos: Público
     """
     return obtener_usuarios_con_rol_en_liga(db, liga_id)
+
+
+@router.get("/ligas/{liga_id}/stats")
+def obtener_stats_usuarios(
+    liga_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener estadísticas de usuarios en una liga.
+
+    Retorna:
+        - total: Total de usuarios con rol en la liga
+        - activos: Usuarios con activo=1
+        - pendientes: Usuarios con activo=0
+        - admin_activos: Admins con activo=1
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
+
+    # Obtener todos los usuarios con rol en esta liga
+    usuarios = db.query(UsuarioRol).filter(UsuarioRol.id_liga == liga_id).all()
+
+    total = len(usuarios)
+    activos = sum(1 for u in usuarios if u.activo)
+    pendientes = total - activos
+
+    # Obtener IDs de rol de admin (nombre = "admin")
+    admin_rol = db.query(Rol).filter(Rol.nombre == "admin").first()
+    admin_activos = sum(1 for u in usuarios if u.activo and u.id_rol == admin_rol.id_rol) if admin_rol else 0
+
+    return {
+        "total": total,
+        "activos": activos,
+        "pendientes": pendientes,
+        "admin_activos": admin_activos
+    }

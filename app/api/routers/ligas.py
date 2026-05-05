@@ -376,3 +376,81 @@ def eliminar_usuario_liga_router(
         if "no encontrada" in str(e) or "no encontrado" in str(e):
             raise HTTPException(404, str(e))
         raise HTTPException(400, str(e))
+
+
+@router.post("/{liga_id}/usuarios/{usuario_id}/rol", response_model=UsuarioLigaResponse, dependencies=[Depends(require_role("admin"))])
+def crear_usuario_rol_router(
+    liga_id: int,
+    usuario_id: int,
+    datos: UsuarioRolUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Crea una nueva relación usuario-rol-liga (para casos especiales de testing/setup).
+
+    Este endpoint permite asignar un rol a un usuario en una liga cuando no existe
+    la relación previamente. Usar con precaución.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - usuario_id (int): ID del usuario (path parameter)
+        - datos (UsuarioRolUpdate): Datos con el rol a asignar
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        UsuarioLigaResponse: Información del usuario con su nuevo rol
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+    """
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
+    from app.models.liga import Liga
+    from app.models.usuario import Usuario
+
+    # Verificar que la liga existe
+    liga = db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    if not liga:
+        raise HTTPException(404, "Liga no encontrada")
+
+    # Verificar que el usuario existe
+    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+    if not usuario:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    # Verificar que el rol existe
+    rol = db.query(Rol).filter(Rol.id_rol == datos.id_rol).first()
+    if not rol:
+        raise HTTPException(400, "Rol no encontrado")
+
+    # Verificar si ya existe la relación
+    asignacion_existente = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if asignacion_existente:
+        raise HTTPException(400, "El usuario ya tiene un rol asignado en esta liga")
+
+    # Crear nueva relación
+    nueva_asignacion = UsuarioRol(
+        id_usuario=usuario_id,
+        id_rol=datos.id_rol,
+        id_liga=liga_id,
+        activo=True
+    )
+    db.add(nueva_asignacion)
+    db.commit()
+    db.refresh(nueva_asignacion)
+
+    return UsuarioLigaResponse(
+        id_usuario_rol=nueva_asignacion.id_usuario_rol,
+        id_usuario=nueva_asignacion.id_usuario,
+        nombre_usuario=nueva_asignacion.usuario.nombre,
+        email=nueva_asignacion.usuario.email,
+        id_rol=nueva_asignacion.id_rol,
+        nombre_rol=nueva_asignacion.rol.nombre,
+        activo=bool(nueva_asignacion.activo)
+    )
