@@ -118,26 +118,39 @@ def asignar_rol_directamente(
         db.add(usuario_rol)
         db.commit()
 
-    # Si es rol jugador y hay equipo, crear entrada en Jugador
+    # Si es rol jugador o coach y hay equipo, manejar asignación
     rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
-    if rol and rol.nombre == "player" and id_equipo:
-        # Verificar si ya existe el jugador
-        jugador_existente = db.query(Jugador).filter(
-            Jugador.id_usuario == id_usuario,
-            Jugador.id_equipo == id_equipo
-        ).first()
-        if not jugador_existente:
-            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
-            dorsal_int = int(dorsal) if dorsal else None
-            jugador = Jugador(
-                id_usuario=id_usuario,
-                id_equipo=id_equipo,
-                dorsal=dorsal_int,
-                posicion=posicion,
-                tipo_jugador=tipo_jugador or "titular"
-            )
-            db.add(jugador)
-            db.commit()
+    if rol and id_equipo:
+        if rol.nombre == "player":
+            # Verificar si ya existe el jugador
+            jugador_existente = db.query(Jugador).filter(
+                Jugador.id_usuario == id_usuario,
+                Jugador.id_equipo == id_equipo
+            ).first()
+            if not jugador_existente:
+                # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
+                dorsal_int = int(dorsal) if dorsal else None
+                jugador = Jugador(
+                    id_usuario=id_usuario,
+                    id_equipo=id_equipo,
+                    dorsal=dorsal_int,
+                    posicion=posicion,
+                    tipo_jugador=tipo_jugador or "titular"
+                )
+                db.add(jugador)
+                db.commit()
+        elif rol.nombre == "coach":
+            # Asignar usuario como entrenador del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
+            if equipo:
+                equipo.id_entrenador = id_usuario
+                db.commit()
+        elif rol.nombre == "delegate":
+            # Asignar usuario como delegado del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
+            if equipo:
+                equipo.id_delegado = id_usuario
+                db.commit()
 
 
 def crear_invitacion(
@@ -407,7 +420,7 @@ def aceptar_invitacion_por_codigo(
     )
     db.add(usuario_rol)
 
-    # Si es jugador con equipo, crear entrada
+    # Si es jugador con equipo, crear entrada; si es coach, asignar como entrenador
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
@@ -422,6 +435,16 @@ def aceptar_invitacion_por_codigo(
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
+        elif rol and rol.nombre == "coach":
+            # Asignar usuario como entrenador del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_entrenador = usuario.id_usuario
+        elif rol and rol.nombre == "delegate":
+            # Asignar usuario como delegado del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_delegado = usuario.id_usuario
 
     # Marcar invitación como usada
     invitacion.usada = True
@@ -497,7 +520,7 @@ def aceptar_invitacion_por_codigo_usuario_existente(
         )
         db.add(usuario_rol)
 
-    # Si hay equipo, crear jugador si es rol player
+    # Si hay equipo, manejar asignación según el rol
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
@@ -515,6 +538,16 @@ def aceptar_invitacion_por_codigo_usuario_existente(
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
+        elif rol and rol.nombre == "coach":
+            # Asignar usuario como entrenador del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_entrenador = usuario_id
+        elif rol and rol.nombre == "delegate":
+            # Asignar usuario como delegado del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_delegado = usuario_id
 
     # Marcar invitación como usada
     invitacion.usada = True
@@ -638,7 +671,7 @@ def aceptar_invitacion(
     )
     db.add(usuario_rol)
 
-    # Si es jugador con equipo, crear entrada
+    # Si es jugador con equipo, crear entrada; si es coach, asignar como entrenador
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
@@ -652,6 +685,16 @@ def aceptar_invitacion(
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
+        elif rol and rol.nombre == "coach":
+            # Asignar usuario como entrenador del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_entrenador = usuario.id_usuario
+        elif rol and rol.nombre == "delegate":
+            # Asignar usuario como delegado del equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_delegado = usuario.id_usuario
 
     invitacion.usada = True
     db.commit()
@@ -738,7 +781,7 @@ def aceptar_invitacion_usuario_existente(
         )
         db.add(usuario_rol)
 
-    # Si hay equipo, actualizar el equipo del jugador (si es rol player)
+    # Si hay equipo, manejar asignación según el rol
     if invitacion.id_equipo and invitacion.id_rol:
         rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
         if rol and rol.nombre == "player":
@@ -754,6 +797,18 @@ def aceptar_invitacion_usuario_existente(
                 tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
+        elif rol and rol.nombre == "coach":
+            # Asignar usuario como entrenador del equipo
+            from app.models.equipo import Equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_entrenador = usuario_id
+        elif rol and rol.nombre == "delegate":
+            # Asignar usuario como delegado del equipo
+            from app.models.equipo import Equipo
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+            if equipo:
+                equipo.id_delegado = usuario_id
 
     # Marcar invitación como usada
     invitacion.usada = True

@@ -90,13 +90,23 @@ def crear_usuario_si_no_existe(headers, email, nombre, rol_principal='viewer'):
                     return usuario, False  # Usuario existente
     return None, False
 
-def crear_jugador(headers, usuario_id, equipo_id, dorsal, posicion):
+def crear_jugador_o_buscar_existente(headers, usuario_id, equipo_id, dorsal, posicion):
+    """Crear jugador o devolver el existente si ya está registrado"""
     data = {'id_usuario': usuario_id, 'id_equipo': equipo_id, 'dorsal': dorsal, 'posicion': posicion, 'activo': True}
     response = requests.post(f'{BASE_URL}/jugadores/', json=data, headers=headers)
+
     if response.status_code == 200:
-        return response.json()
-    print(f"  ERROR crear jugador: {response.text[:100]}")
-    return None
+        return response.json(), True  # Nuevo jugador
+
+    # Si falla (400 o 500), buscar si ya existe el jugador
+    # El jugador existe si ya tiene ese usuario en ese equipo
+    response = requests.get(f'{BASE_URL}/jugadores/', params={'equipo_id': equipo_id}, headers=headers)
+    if response.status_code == 200:
+        jugadores = response.json()
+        for jugador in jugadores:
+            if jugador.get('id_usuario') == usuario_id:
+                return jugador, False  # Jugador existente
+    return None, False
 
 def crear_partido(headers, liga_id, local_id, visitante_id, fecha, estado):
     data = {'id_liga': liga_id, 'id_equipo_local': local_id, 'id_equipo_visitante': visitante_id, 'fecha': fecha, 'estado': estado}
@@ -188,12 +198,14 @@ def generar_datos_liga(headers, liga):
         for dorsal in range(1, 14):
             email_jugador = f"j{dorsal}.{equipo_nombre}.liga{liga_id}@test.com"
             nombre_jugador = f"Jugador {dorsal} {equipo['nombre']}"
-            usuario_jugador, nuevo = crear_usuario_si_no_existe(headers, email_jugador, nombre_jugador, 'viewer')
+            usuario_jugador, usuario_nuevo = crear_usuario_si_no_existe(headers, email_jugador, nombre_jugador, 'viewer')
 
             if usuario_jugador:
-                jugador = crear_jugador(headers, usuario_jugador['id_usuario'], equipo['id_equipo'], dorsal, posiciones[dorsal])
+                jugador, jugador_nuevo = crear_jugador_o_buscar_existente(headers, usuario_jugador['id_usuario'], equipo['id_equipo'], dorsal, posiciones[dorsal])
                 if jugador:
                     jugadores_creados += 1
+                    if jugador_nuevo:
+                        print(f"    OK {nombre_jugador} (dorsal {dorsal}, {posiciones[dorsal]}) - nuevo")
             time.sleep(0.1)
 
         print(f"  Equipo {equipo['nombre']}: {jugadores_creados} jugadores")

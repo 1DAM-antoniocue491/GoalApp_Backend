@@ -38,9 +38,9 @@ def crear_equipo(db: Session, datos: EquipoCreate, usuario_id: int = None):
     if equipo_existente:
         raise ValueError(f"Ya existe un equipo con el nombre '{datos.nombre}' en esta liga")
 
-    # Si no se especifica entrenador/delegado, usar el usuario que crea el equipo
-    id_entrenador = datos.id_entrenador or usuario_id
-    id_delegado = datos.id_delegado or usuario_id
+    # El entrenador y delegado se asignan mediante invitación (no auto-asignar al creador)
+    id_entrenador = datos.id_entrenador  # Puede ser None, se asigna vía invitación
+    id_delegado = datos.id_delegado  # Puede ser None, se asigna vía invitación
 
     equipo = Equipo(
         nombre=datos.nombre,

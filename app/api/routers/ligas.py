@@ -439,7 +439,7 @@ def crear_usuario_rol_router(
         id_usuario=usuario_id,
         id_rol=datos.id_rol,
         id_liga=liga_id,
-        activo=True
+        activo=1  # PostgreSQL: integer (1=activo, 0=pendiente)
     )
     db.add(nueva_asignacion)
     db.commit()
