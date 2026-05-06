@@ -360,48 +360,25 @@ def obtener_estadisticas_jugador(
     if not jugador:
         return None
 
-    # Obtener IDs de partidos de la liga
-    partidos_ids = db.query(Partido.id_partido).filter(
-        Partido.id_liga == liga_id
+    # Obtener todos los eventos del jugador en una sola query (optimizado)
+    eventos = db.query(
+        EventoPartido.tipo_evento,
+        EventoPartido.id_partido
+    ).filter(
+        EventoPartido.id_jugador == jugador.id_jugador,
+        EventoPartido.id_partido.in_(
+            db.query(Partido.id_partido).filter(Partido.id_liga == liga_id)
+        )
     ).all()
-    partidos_ids = [p[0] for p in partidos_ids]
 
-    # Contar goles
-    goles = db.query(EventoPartido).filter(
-        EventoPartido.tipo_evento == TIPO_GOL,
-        EventoPartido.id_jugador == jugador.id_jugador,
-        EventoPartido.id_partido.in_(partidos_ids)
-    ).count()
+    # Contar estadísticas desde eventos cargados en memoria
+    goles = sum(1 for e in eventos if e.tipo_evento == TIPO_GOL)
+    asistencias = sum(1 for e in eventos if e.tipo_evento == TIPO_ASISTENCIA)
+    amarillas = sum(1 for e in eventos if e.tipo_evento == TIPO_AMARILLA)
+    rojas = sum(1 for e in eventos if e.tipo_evento == TIPO_ROJA)
+    partidos_jugados = len(set(e.id_partido for e in eventos))
 
-    # Contar asistencias
-    asistencias = db.query(EventoPartido).filter(
-        EventoPartido.tipo_evento == TIPO_ASISTENCIA,
-        EventoPartido.id_jugador == jugador.id_jugador,
-        EventoPartido.id_partido.in_(partidos_ids)
-    ).count()
-
-    # Contar tarjetas amarillas
-    amarillas = db.query(EventoPartido).filter(
-        EventoPartido.tipo_evento == TIPO_AMARILLA,
-        EventoPartido.id_jugador == jugador.id_jugador,
-        EventoPartido.id_partido.in_(partidos_ids)
-    ).count()
-
-    # Contar tarjetas rojas
-    rojas = db.query(EventoPartido).filter(
-        EventoPartido.tipo_evento == TIPO_ROJA,
-        EventoPartido.id_jugador == jugador.id_jugador,
-        EventoPartido.id_partido.in_(partidos_ids)
-    ).count()
-
-    # Contar partidos jugados (partidos donde el jugador marcó gol o tuvo eventos)
-    # Para ser más precisos, contamos partidos donde el jugador fue titular o tuvo eventos
-    partidos_jugados = db.query(EventoPartido).filter(
-        EventoPartido.id_jugador == jugador.id_jugador,
-        EventoPartido.id_partido.in_(partidos_ids)
-    ).distinct().count()
-
-    # Si no tiene eventos, verificar si está en un equipo y contar partidos del equipo
+    # Si no tiene eventos, contar partidos del equipo
     if partidos_jugados == 0:
         partidos_jugados = db.query(Partido).filter(
             Partido.id_liga == liga_id,
@@ -409,17 +386,12 @@ def obtener_estadisticas_jugador(
             (Partido.id_equipo_visitante == jugador.id_equipo)
         ).count()
 
-    # Contar veces que fue MVP (simplificado: jugador con más goles en un partido)
-    # Esto es complejo, usamos un conteo simple de partidos donde marcó 2+ goles
-    veces_mvp = 0
-    for partido_id in partidos_ids:
-        goles_en_partido = db.query(EventoPartido).filter(
-            EventoPartido.tipo_evento == TIPO_GOL,
-            EventoPartido.id_jugador == jugador.id_jugador,
-            EventoPartido.id_partido == partido_id
-        ).count()
-        if goles_en_partido >= 2:  # Al menos 2 goles = candidato a MVP
-            veces_mvp += 1
+    # Contar veces que fue MVP (goles por partido)
+    goles_por_partido = defaultdict(int)
+    for e in eventos:
+        if e.tipo_evento == TIPO_GOL:
+            goles_por_partido[e.id_partido] += 1
+    veces_mvp = sum(1 for g in goles_por_partido.values() if g >= 2)
 
     # Obtener nombre del usuario y equipo
     usuario = db.query(Usuario).filter(Usuario.id_usuario == jugador.id_usuario).first()
