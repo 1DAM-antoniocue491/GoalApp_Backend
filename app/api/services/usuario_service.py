@@ -610,14 +610,19 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
                      - email: Email del usuario
                      - id_rol: ID del rol
                      - rol: Nombre del rol (admin, entrenador, delegado, jugador, etc.)
+                     - activo: bool
+                     - id_equipo: ID del equipo (si aplica)
+                     - nombre_equipo: Nombre del equipo (si aplica)
     """
     from app.models.usuario_rol import UsuarioRol
     from app.models.usuario import Usuario
     from app.models.rol import Rol
+    from app.models.jugador import Jugador
+    from app.models.equipo import Equipo
 
     # Query con join para obtener usuario + rol + estado activo en la liga
     resultados = (
-        db.query(Usuario, Rol, UsuarioRol.activo)
+        db.query(Usuario, Rol, UsuarioRol.activo, UsuarioRol.id_usuario)
         .join(UsuarioRol, UsuarioRol.id_usuario == Usuario.id_usuario)
         .join(Rol, Rol.id_rol == UsuarioRol.id_rol)
         .filter(UsuarioRol.id_liga == liga_id)
@@ -626,14 +631,50 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
 
     # Construir lista de respuestas con datos de usuario y rol
     usuarios_con_rol = []
-    for usuario, rol, activo in resultados:
-        usuarios_con_rol.append({
-            "id_usuario": usuario.id_usuario,
+    for usuario, rol, activo, id_usuario in resultados:
+        usuario_data = {
+            "id_usuario": id_usuario,
             "nombre": usuario.nombre,
             "email": usuario.email,
             "id_rol": rol.id_rol,
             "rol": rol.nombre,
             "activo": bool(activo),
-        })
+            "id_equipo": None,
+            "nombre_equipo": None,
+        }
+
+        # Obtener equipo según el rol
+        if rol.nombre == 'jugador':
+            # Buscar jugador en esta liga
+            jugador = db.query(Jugador).filter(
+                Jugador.id_usuario == id_usuario,
+                Jugador.id_liga == liga_id
+            ).first()
+            if jugador:
+                usuario_data["id_equipo"] = jugador.id_equipo
+                # Obtener nombre del equipo
+                equipo = db.query(Equipo).filter(Equipo.id_equipo == jugador.id_equipo).first()
+                if equipo:
+                    usuario_data["nombre_equipo"] = equipo.nombre
+        elif rol.nombre == 'entrenador':
+            # Buscar equipo donde es entrenador
+            equipo = db.query(Equipo).filter(
+                Equipo.id_entrenador == id_usuario,
+                Equipo.id_liga == liga_id
+            ).first()
+            if equipo:
+                usuario_data["id_equipo"] = equipo.id_equipo
+                usuario_data["nombre_equipo"] = equipo.nombre
+        elif rol.nombre == 'delegado':
+            # Buscar equipo donde es delegado
+            equipo = db.query(Equipo).filter(
+                Equipo.id_delegado == id_usuario,
+                Equipo.id_liga == liga_id
+            ).first()
+            if equipo:
+                usuario_data["id_equipo"] = equipo.id_equipo
+                usuario_data["nombre_equipo"] = equipo.nombre
+
+        usuarios_con_rol.append(usuario_data)
 
     return usuarios_con_rol

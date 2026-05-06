@@ -756,11 +756,10 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     if partido.estado != "programado":
         raise ValueError(f"El partido debe estar en estado 'programado', estado actual: {partido.estado}")
 
-    # Validar fecha (debe ser hoy o posterior)
-    hoy = datetime.now().date()
-    fecha_partido = partido.fecha.date()
-    if fecha_partido < hoy:
-        raise ValueError("No se puede iniciar un partido con fecha pasada")
+    # Validar que la fecha/hora del partido haya llegado
+    ahora = datetime.now()
+    if partido.fecha > ahora:
+        raise ValueError("La fecha/hora del partido aún no ha llegado")
 
     # Validar alineación de ambos equipos
     for id_equipo in [partido.id_equipo_local, partido.id_equipo_visitante]:

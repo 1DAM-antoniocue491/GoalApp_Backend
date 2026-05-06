@@ -44,11 +44,26 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
     if titulares > 11:
         raise ValueError("No puede haber más de 11 titulares por equipo")
 
-    # Eliminar solo las convocatorias existentes de los jugadores proporcionados
-    ids_jugadores = [j.id_jugador for j in datos.jugadores]
-    db.query(ConvocatoriaPartido).filter(
+    # Obtener el equipo de los jugadores para eliminar solo las convocatorias de ese equipo
+    if not datos.jugadores:
+        # Si no hay jugadores, no hay nada que crear, pero tampoco que eliminar
+        db.commit()
+        return []
+
+    # Obtener el equipo del primer jugador para filtrar las convocatorias a eliminar
+    primer_jugador = db.query(Jugador).filter(Jugador.id_jugador == datos.jugadores[0].id_jugador).first()
+    if not primer_jugador:
+        raise ValueError("Jugador no encontrado")
+
+    id_equipo = primer_jugador.id_equipo
+
+    # Eliminar TODAS las convocatorias existentes de este equipo para este partido
+    # Esto permite reemplazar completamente la convocatoria al editar
+    db.query(ConvocatoriaPartido).join(
+        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
+    ).filter(
         ConvocatoriaPartido.id_partido == datos.id_partido,
-        ConvocatoriaPartido.id_jugador.in_(ids_jugadores)
+        Jugador.id_equipo == id_equipo
     ).delete()
 
     # Crear nueva convocatoria

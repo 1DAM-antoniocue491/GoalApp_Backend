@@ -47,25 +47,31 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     if not partido:
         raise ValueError("Partido no encontrado")
 
-    # Verificar que el usuario es delegado del equipo local
-    equipo_local = partido.equipo_local
+    # ============================================================
+    # VALIDACIÓN DE PERMISOS: Admin O Delegado del equipo local
+    # ============================================================
+    tiene_permiso = False
 
-    # Verificar que el usuario tiene el rol de delegate
-    rol_delegate = db.query(Rol).filter(Rol.nombre == "delegate").first()
-    if not rol_delegate:
-        raise ValueError("Rol 'delegate' no encontrado")
+    # 1. Verificar si es ADMIN de la liga
+    rol_admin = db.query(Rol).filter(Rol.nombre == "admin").first()
+    if rol_admin:
+        admin_liga = db.query(UsuarioRol).filter(
+            UsuarioRol.id_usuario == usuario_id,
+            UsuarioRol.id_rol == rol_admin.id_rol,
+            UsuarioRol.id_liga == partido.id_liga
+        ).first()
+        if admin_liga:
+            tiene_permiso = True
 
-    usuario_rol = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_rol == rol_delegate.id_rol
-    ).first()
+    # 2. Si no es admin, verificar si es DELEGADO del equipo local
+    if not tiene_permiso:
+        equipo_local = partido.equipo_local
+        if equipo_local.id_delegado == usuario_id:
+            tiene_permiso = True
 
-    if not usuario_rol:
-        raise ValueError("Solo los delegados pueden crear eventos de partido")
-
-    # Verificar que el usuario es el delegado del equipo LOCAL
-    if equipo_local.id_delegado != usuario_id:
-        raise ValueError("Solo el delegado del equipo local puede añadir eventos del partido")
+    if not tiene_permiso:
+        raise ValueError("Solo el administrador de la liga o el delegado del equipo local pueden añadir eventos del partido")
+    # ============================================================
 
     # VALIDACIONES ESPECÍFICAS POR TIPO DE EVENTO
     if datos.tipo_evento == "cambio":

@@ -173,6 +173,8 @@ class UsuarioConRolEnLigaResponse(BaseModel):
         id_rol (int): ID del rol en esta liga
         rol (str): Nombre del rol (admin, entrenador, delegado, jugador, etc.)
         activo (bool): Si el usuario está activo en la liga
+        id_equipo (int, optional): ID del equipo al que pertenece (si aplica)
+        nombre_equipo (str, optional): Nombre del equipo (si aplica)
     """
     id_usuario: int
     nombre: str
@@ -180,6 +182,8 @@ class UsuarioConRolEnLigaResponse(BaseModel):
     id_rol: int
     rol: str
     activo: bool
+    id_equipo: int | None = None
+    nombre_equipo: str | None = None
 
     class Config:
         from_attributes = True
