@@ -5,7 +5,11 @@ Maneja operaciones CRUD de alineaciones de jugadores en partidos.
 """
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from datetime import timezone
 from typing import List
+
+# Posiciones válidas en el campo
+POSICIONES_VALIDAS = {"portero", "defensa", "mediocentro", "centrocampista", "delantero"}
 
 from app.models.alineacion_partido import AlineacionPartido
 from app.models.jugador import Jugador
@@ -55,6 +59,10 @@ def crear_alineacion(db: Session, datos: AlineacionCreate) -> AlineacionPartido:
     if alineacion_existente:
         raise ValueError("El jugador ya está alineado en este partido")
 
+    # Validar que la posición sea válida
+    if datos.id_posicion.lower() not in POSICIONES_VALIDAS:
+        raise ValueError(f"Posición '{datos.id_posicion}' no válida. Posiciones permitidas: {', '.join(POSICIONES_VALIDAS)}")
+
     alineacion = AlineacionPartido(
         id_partido=datos.id_partido,
         id_jugador=datos.id_jugador,
@@ -80,12 +88,31 @@ def crear_alineaciones_bulk(db: Session, datos: AlineacionBulkCreate) -> List[Al
         List[AlineacionPartido]: Lista de alineaciones creadas
 
     Raises:
-        ValueError: Si el partido no existe o si hay errores en las alineaciones
+        ValueError: Si el partido no existe, hay errores en las alineaciones,
+                   o los datos han sido modificados por otro usuario (optimistic locking)
     """
     # Verificar que el partido existe
     partido = db.query(Partido).filter(Partido.id_partido == datos.id_partido).first()
     if not partido:
         raise ValueError("Partido no encontrado")
+
+    # Optimistic locking: verificar si los datos han sido modificados
+    if datos.updated_at is not None:
+        # Obtener el timestamp actual más reciente de la alineación
+        alineacion_existente = db.query(AlineacionPartido).filter(
+            AlineacionPartido.id_partido == datos.id_partido
+        ).order_by(
+            AlineacionPartido.updated_at.desc()
+        ).first()
+
+        if alineacion_existente:
+            # Comparar timestamps (normalizar a UTC para comparación consistente)
+            timestamp_cliente = datos.updated_at.replace(tzinfo=timezone.utc) if datos.updated_at.tzinfo is None else datos.updated_at.astimezone(timezone.utc)
+            timestamp_bd = alineacion_existente.updated_at.replace(tzinfo=timezone.utc) if alineacion_existente.updated_at.tzinfo is None else alineacion_existente.updated_at.astimezone(timezone.utc)
+
+            # Si el timestamp de BD es más reciente, rechazar la edición
+            if timestamp_bd > timestamp_cliente:
+                raise ValueError("Los datos han sido modificados por otro usuario. Por favor, recarga la página e inténtalo de nuevo.")
 
     # Contar titulares por equipo (máximo 11 por equipo)
     # Agrupar alineaciones por equipo usando el id_jugador -> id_equipo
@@ -113,6 +140,10 @@ def crear_alineaciones_bulk(db: Session, datos: AlineacionBulkCreate) -> List[Al
         jugador = db.query(Jugador).filter(Jugador.id_jugador == alineacion_data.id_jugador).first()
         if not jugador:
             raise ValueError(f"Jugador con ID {alineacion_data.id_jugador} no encontrado")
+
+        # Validar que la posición sea válida
+        if alineacion_data.id_posicion.lower() not in POSICIONES_VALIDAS:
+            raise ValueError(f"Posición '{alineacion_data.id_posicion}' no válida. Posiciones permitidas: {', '.join(POSICIONES_VALIDAS)}")
 
         alineacion = AlineacionPartido(
             id_partido=datos.id_partido,
@@ -215,6 +246,11 @@ def obtener_alineacion_equipo(
     titulares = []
     suplentes = []
 
+    # Obtener el updated_at más reciente de todas las alineaciones
+    updated_at = None
+    if alineaciones:
+        updated_at = max(a.updated_at for a in alineaciones)
+
     for alineacion in alineaciones:
         jugador = db.query(Jugador).filter(Jugador.id_jugador == alineacion.id_jugador).first()
 
@@ -239,7 +275,8 @@ def obtener_alineacion_equipo(
         id_equipo=id_equipo,
         nombre_equipo=nombre_equipo,
         titulares=titulares,
-        suplentes=suplentes
+        suplentes=suplentes,
+        updated_at=updated_at
     )
 
 
@@ -268,6 +305,8 @@ def actualizar_alineacion(
 
     # Actualizar posición si se proporciona
     if datos.id_posicion is not None:
+        if datos.id_posicion.lower() not in POSICIONES_VALIDAS:
+            raise ValueError(f"Posición '{datos.id_posicion}' no válida. Posiciones permitidas: {', '.join(POSICIONES_VALIDAS)}")
         alineacion.id_posicion = datos.id_posicion
 
     # Actualizar estado de titular si se proporciona

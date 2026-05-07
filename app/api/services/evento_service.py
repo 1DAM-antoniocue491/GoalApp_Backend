@@ -19,9 +19,11 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     """
     Registra un nuevo evento en un partido.
 
-    REGLA DE NEGOCIO:
-    Solo el delegado del equipo LOCAL puede añadir eventos del partido.
-    Puede registrar eventos de AMBOS equipos (local y visitante).
+    REGLAS DE NEGOCIO:
+    - El ADMIN de la liga puede registrar eventos de AMBOS equipos (local y visitante)
+    - El DELEGADO del equipo local SOLO puede registrar eventos del equipo LOCAL
+    - El DELEGADO del equipo visitante SOLO puede registrar eventos del equipo VISITANTE
+    - Se valida que el jugador del evento pertenece al equipo cuyo delegado está registrando
 
     Para sustituciones:
     - Valida que el jugador que entra está en suplentes
@@ -37,7 +39,8 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
         EventoPartido: Objeto EventoPartido creado con su ID asignado
 
     Raises:
-        ValueError: Si el usuario no es delegado del equipo local o validaciones de sustitución fallan
+        ValueError: Si el usuario no tiene permiso (no es admin ni delegado) o si el delegado
+                    intenta registrar eventos de un equipo que no es el suyo
     """
     # Obtener el partido con ambos equipos
     partido = db.query(Partido).filter(Partido.id_partido == datos.id_partido).options(
@@ -48,11 +51,12 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
         raise ValueError("Partido no encontrado")
 
     # ============================================================
-    # VALIDACIÓN DE PERMISOS: Admin O Delegado del equipo local
+    # VALIDACIÓN DE PERMISOS: Admin O Delegado (local o visitante)
     # ============================================================
-    tiene_permiso = False
+    es_admin = False
+    equipo_delegado_id = None  # ID del equipo cuyo delegado está registrando
 
-    # 1. Verificar si es ADMIN de la liga
+    # 1. Verificar si es ADMIN de la liga (puede registrar eventos de AMBOS equipos)
     rol_admin = db.query(Rol).filter(Rol.nombre == "admin").first()
     if rol_admin:
         admin_liga = db.query(UsuarioRol).filter(
@@ -61,16 +65,29 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
             UsuarioRol.id_liga == partido.id_liga
         ).first()
         if admin_liga:
-            tiene_permiso = True
+            es_admin = True
 
-    # 2. Si no es admin, verificar si es DELEGADO del equipo local
-    if not tiene_permiso:
-        equipo_local = partido.equipo_local
-        if equipo_local.id_delegado == usuario_id:
-            tiene_permiso = True
+    # 2. Si no es admin, verificar si es DELEGADO (local o visitante)
+    if not es_admin:
+        # Verificar si es delegado del equipo local
+        if partido.equipo_local and partido.equipo_local.id_delegado == usuario_id:
+            equipo_delegado_id = partido.equipo_local.id_equipo
+        # Verificar si es delegado del equipo visitante
+        elif partido.equipo_visitante and partido.equipo_visitante.id_delegado == usuario_id:
+            equipo_delegado_id = partido.equipo_visitante.id_equipo
 
-    if not tiene_permiso:
-        raise ValueError("Solo el administrador de la liga o el delegado del equipo local pueden añadir eventos del partido")
+    if not es_admin and not equipo_delegado_id:
+        raise ValueError("Solo el administrador de la liga o los delegados de los equipos pueden añadir eventos del partido")
+
+    # 3. VALIDACIÓN ADICIONAL: El delegado solo puede registrar eventos de jugadores de SU equipo
+    # El admin puede registrar eventos de cualquier equipo
+    if not es_admin and equipo_delegado_id:
+        # Obtener el equipo del jugador que está registrando el evento
+        jugador = db.query(Jugador).filter(Jugador.id_jugador == datos.id_jugador).first()
+        if not jugador:
+            raise ValueError("Jugador no encontrado")
+        if jugador.id_equipo != equipo_delegado_id:
+            raise ValueError("El delegado solo puede registrar eventos de jugadores de su propio equipo")
     # ============================================================
 
     # VALIDACIONES ESPECÍFICAS POR TIPO DE EVENTO

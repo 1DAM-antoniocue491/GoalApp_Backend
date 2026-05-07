@@ -35,7 +35,8 @@ class Jugador(Base):
     id_jugador = Column(Integer, primary_key=True)
 
     # Relaciones: usuario y equipo
-    id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario"), nullable=False, unique=True)  # Un usuario = un jugador
+    # ondelete="CASCADE" asegura que al eliminar el usuario, se elimine el jugador (evita huérfanos)
+    id_usuario = Column(Integer, ForeignKey("usuarios.id_usuario", ondelete="CASCADE"), nullable=False, unique=True)  # Un usuario = un jugador
     id_equipo = Column(Integer, ForeignKey("equipos.id_equipo"), nullable=False)
 
     # Información deportiva
@@ -51,6 +52,7 @@ class Jugador(Base):
 
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
-    usuario = relationship("Usuario", lazy="raise")
+    # back_populates="jugador" sincroniza la relación bidireccional con Usuario
+    usuario = relationship("Usuario", back_populates="jugador", lazy="raise")
     equipo = relationship("Equipo", back_populates="jugadores", lazy="raise")
     estados_partido = relationship("EstadoJugadorPartido", back_populates="jugador", lazy="raise")

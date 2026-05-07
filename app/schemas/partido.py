@@ -58,8 +58,11 @@ class PartidoCreate(PartidoBase):
     Schema para crear un nuevo partido.
     Usado en el endpoint POST /partidos/
     Hereda todos los campos de PartidoBase como requeridos.
+
+    Attributes:
+        id_jornada (int | None): ID de la jornada (opcional, se auto-asigna si no se proporciona)
     """
-    pass
+    id_jornada: int | None = None
 
 class PartidoUpdate(BaseModel):
     """

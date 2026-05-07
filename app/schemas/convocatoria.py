@@ -5,7 +5,7 @@ Define los modelos Pydantic para crear y consultar convocatorias.
 """
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 
 class ConvocatoriaItemBase(BaseModel):
@@ -27,9 +27,11 @@ class ConvocatoriaCreate(BaseModel):
     Attributes:
         id_partido (int): ID del partido
         jugadores (List[ConvocatoriaItemBase]): Lista de jugadores convocados
+        updated_at (datetime | None): Timestamp de la última lectura (para optimistic locking)
     """
     id_partido: int = Field(..., description="ID del partido")
     jugadores: List[ConvocatoriaItemBase] = Field(..., description="Lista de jugadores convocados")
+    updated_at: Optional[datetime] = Field(None, description="Timestamp de la última lectura (optimistic locking)")
 
 
 class ConvocatoriaResponse(BaseModel):
@@ -79,7 +81,9 @@ class ConvocatoriaPartidoResponse(BaseModel):
         id_partido (int): ID del partido
         titulares (List[JugadorConvocadoResponse]): Jugadores titulares
         suplentes (List[JugadorConvocadoResponse]): Jugadores suplentes
+        updated_at (datetime | None): Timestamp de última actualización (para optimistic locking)
     """
     id_partido: int
     titulares: List[JugadorConvocadoResponse]
     suplentes: List[JugadorConvocadoResponse]
+    updated_at: Optional[datetime] = None

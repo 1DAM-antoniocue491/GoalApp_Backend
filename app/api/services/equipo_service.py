@@ -10,6 +10,9 @@ from app.models.partido import Partido
 from app.models.jugador import Jugador
 from app.models.usuario import Usuario
 from app.models.evento_partido import EventoPartido
+from app.models.convocatoria_partido import ConvocatoriaPartido
+from app.models.alineacion_partido import AlineacionPartido
+from app.models.estado_jugador_partido import EstadoJugadorPartido
 from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoRendimientoResponse
 
 
@@ -73,6 +76,31 @@ def obtener_equipos(db: Session, liga_id: int = None):
     return query.all()
 
 
+def obtener_equipos_minimal(db: Session, liga_id: int = None):
+    """
+    Obtiene todos los equipos con datos mínimos (solo id, nombre, escudo), opcionalmente filtrados por liga.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int, optional): ID de la liga para filtrar
+
+    Returns:
+        list[dict]: Lista de diccionarios con id_equipo, nombre y escudo
+    """
+    query = db.query(Equipo.id_equipo, Equipo.nombre, Equipo.escudo)
+    if liga_id is not None:
+        query = query.filter(Equipo.id_liga == liga_id)
+
+    resultados = []
+    for id_equipo, nombre, escudo in query.all():
+        resultados.append({
+            "id_equipo": id_equipo,
+            "nombre": nombre,
+            "escudo": escudo
+        })
+    return resultados
+
+
 def obtener_equipo_por_id(db: Session, equipo_id: int):
     """
     Busca un equipo por su ID.
@@ -124,7 +152,7 @@ def eliminar_equipo(db: Session, equipo_id: int):
         equipo_id (int): ID del equipo a eliminar
 
     Raises:
-        ValueError: Si el equipo no existe
+        ValueError: Si el equipo no existe o si eliminarlo deja la liga con menos de 2 equipos
     """
     # Cargar el equipo con todas sus relaciones para que cascade delete funcione
     equipo = db.query(Equipo).options(
@@ -136,6 +164,14 @@ def eliminar_equipo(db: Session, equipo_id: int):
 
     if not equipo:
         raise ValueError("Equipo no encontrado")
+
+    # BUG 3.4: Validar que la liga no se quede con menos de 2 equipos
+    total_equipos_liga = db.query(Equipo).filter(Equipo.id_liga == equipo.id_liga).count()
+    if total_equipos_liga <= 2:
+        raise ValueError(
+            f"No se puede eliminar el equipo: la liga necesita al menos 2 equipos "
+            f"(actualmente tiene {total_equipos_liga}). Añade más equipos antes de eliminar."
+        )
 
     db.delete(equipo)
     db.commit()
@@ -794,6 +830,30 @@ def eliminar_miembro_equipo(db: Session, equipo_id: int, id_usuario: int, id_ent
     if not jugador:
         raise ValueError("El usuario no es miembro de este equipo")
 
+    # BUG 3.5: Validar que el equipo no se quede con menos de 11 jugadores
+    total_jugadores = db.query(Jugador).filter(Jugador.id_equipo == equipo_id).count()
+    if total_jugadores <= 11:
+        raise ValueError(
+            f"No se puede eliminar el jugador: el equipo necesita al menos 11 jugadores "
+            f"(actualmente tiene {total_jugadores}). Añade más jugadores antes de eliminar."
+        )
+
+    # BUG 3.12: Limpiar relaciones del jugador antes de eliminar
+    # Eliminar de ConvocatoriaPartido
+    db.query(ConvocatoriaPartido).filter(
+        ConvocatoriaPartido.id_jugador == jugador.id_jugador
+    ).delete(synchronize_session=False)
+
+    # Eliminar de AlineacionPartido
+    db.query(AlineacionPartido).filter(
+        AlineacionPartido.id_jugador == jugador.id_jugador
+    ).delete(synchronize_session=False)
+
+    # Eliminar de EstadoJugadorPartido
+    db.query(EstadoJugadorPartido).filter(
+        EstadoJugadorPartido.id_jugador == jugador.id_jugador
+    ).delete(synchronize_session=False)
+
     db.delete(jugador)
     db.commit()
 
@@ -803,6 +863,9 @@ def eliminar_miembro_equipo(db: Session, equipo_id: int, id_usuario: int, id_ent
 def asignar_capitan(db: Session, equipo_id: int, jugador_id: int, id_entrenador: int = None):
     """
     Asigna un capitán a un equipo. Solo puede haber 1 capitán por equipo.
+
+    Usa bloqueo transaccional FOR UPDATE para evitar race conditions cuando
+    múltiples llamadas simultáneas intentan asignar capitanes del mismo equipo.
 
     Args:
         db: Sesión de base de datos
@@ -836,15 +899,26 @@ def asignar_capitan(db: Session, equipo_id: int, jugador_id: int, id_entrenador:
         if equipo.id_entrenador != id_entrenador:
             raise PermissionError("Solo el entrenador del equipo puede asignar capitán")
 
-    # Setear es_capitan=False a todos los jugadores del equipo
+    # FIX BUG 3.3: Usar UPDATE atómico con FROM para evitar race conditions
+    # Esto asegura que solo un capitán exista al final, incluso con llamadas simultáneas
     db.query(Jugador).filter(
         Jugador.id_equipo == equipo_id
-    ).update({"es_capitan": False})
+    ).update(
+        {"es_capitan": False},
+        synchronize_session='fetch'
+    )
 
-    # Setear es_capitan=True al jugador seleccionado
-    jugador.es_capitan = True
+    # Actualización atómica del nuevo capitán
+    db.query(Jugador).filter(
+        Jugador.id_jugador == jugador_id
+    ).update(
+        {"es_capitan": True},
+        synchronize_session='fetch'
+    )
 
     db.commit()
+
+    # Recargar el jugador con los datos actualizados
     db.refresh(jugador)
 
     return jugador

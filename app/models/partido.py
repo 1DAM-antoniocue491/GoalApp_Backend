@@ -38,10 +38,10 @@ class Partido(Base):
     id_partido = Column(Integer, primary_key=True)
 
     # Relaciones: liga, jornada y equipos participantes
-    id_liga = Column(Integer, ForeignKey("ligas.id_liga"), nullable=False)
-    id_jornada = Column(Integer, ForeignKey("jornadas.id_jornada"), nullable=True)
-    id_equipo_local = Column(Integer, ForeignKey("equipos.id_equipo"), nullable=False)
-    id_equipo_visitante = Column(Integer, ForeignKey("equipos.id_equipo"), nullable=False)
+    id_liga = Column(Integer, ForeignKey("ligas.id_liga", ondelete="CASCADE"), nullable=False)
+    id_jornada = Column(Integer, ForeignKey("jornadas.id_jornada", ondelete="CASCADE"), nullable=True)
+    id_equipo_local = Column(Integer, ForeignKey("equipos.id_equipo", ondelete="CASCADE"), nullable=False)
+    id_equipo_visitante = Column(Integer, ForeignKey("equipos.id_equipo", ondelete="CASCADE"), nullable=False)
 
     # Información del partido
     fecha = Column(DateTime(timezone=True), nullable=False)  # Fecha y hora del partido

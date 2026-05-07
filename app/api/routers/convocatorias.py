@@ -6,7 +6,8 @@ Endpoints para crear, obtener y eliminar convocatorias.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, get_current_user
+from app.api.dependencies import get_db, get_current_user, require_role
+from fastapi import Depends
 from app.schemas.convocatoria import ConvocatoriaCreate, ConvocatoriaPartidoResponse
 from app.api.services.convocatoria_service import (
     crear_convocatoria,
@@ -62,10 +63,11 @@ def crear_convocatoria_router(
         raise HTTPException(400, str(e))
 
 
-@router.get("/partido/{id_partido}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria del partido")
+@router.get("/partido/{id_partido}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria del partido", dependencies=[Depends(require_role("jugador"))])
 def obtener_convocatoria_router(
     id_partido: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Obtiene la convocatoria completa de un partido.
@@ -75,11 +77,13 @@ def obtener_convocatoria_router(
     Parámetros:
         - id_partido (int): ID del partido
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
 
     Returns:
         ConvocatoriaPartidoResponse: Convocatoria con titulares y suplentes
 
-    Requiere autenticación: No
+    Requiere autenticación: Sí
+    Roles permitidos: Jugador, Coach, Delegate, Admin
     """
     try:
         convocatoria = obtener_convocatoria_partido(db, id_partido)
@@ -90,11 +94,12 @@ def obtener_convocatoria_router(
         raise HTTPException(404, str(e))
 
 
-@router.get("/partido/{id_partido}/equipo/{id_equipo}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria de un equipo")
+@router.get("/partido/{id_partido}/equipo/{id_equipo}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria de un equipo", dependencies=[Depends(require_role("jugador"))])
 def obtener_convocatoria_equipo_router(
     id_partido: int,
     id_equipo: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Obtiene la convocatoria de un equipo específico para un partido.
@@ -105,11 +110,13 @@ def obtener_convocatoria_equipo_router(
         - id_partido (int): ID del partido
         - id_equipo (int): ID del equipo
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
 
     Returns:
         ConvocatoriaPartidoResponse: Convocatoria con titulares y suplentes del equipo
 
-    Requiere autenticación: No
+    Requiere autenticación: Sí
+    Roles permitidos: Jugador, Coach, Delegate, Admin
     """
     try:
         convocatoria = obtener_convocatoria_equipo(db, id_partido, id_equipo)

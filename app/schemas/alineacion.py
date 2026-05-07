@@ -15,12 +15,12 @@ class AlineacionBase(BaseModel):
     Attributes:
         id_partido (int): ID del partido
         id_jugador (int): ID del jugador
-        id_posicion (int): ID de la posición en el campo
+        id_posicion (str): Posición en el campo ("portero", "defensa", "mediocentro", "centrocampista", "delantero")
         titular (bool): Si el jugador es titular (default: False)
     """
     id_partido: int = Field(..., description="ID del partido")
     id_jugador: int = Field(..., description="ID del jugador")
-    id_posicion: int = Field(..., description="ID de la posición en el campo")
+    id_posicion: str = Field(..., description="Posición en el campo (\"portero\", \"defensa\", \"mediocentro\", \"centrocampista\", \"delantero\")")
     titular: bool = Field(default=False, description="Si el jugador es titular")
 
 
@@ -40,10 +40,10 @@ class AlineacionUpdate(BaseModel):
     Todos los campos son opcionales para actualización parcial.
 
     Attributes:
-        id_posicion (int | None): Nueva posición del jugador
+        id_posicion (str | None): Nueva posición del jugador
         titular (bool | None): Nuevo estado de titular
     """
-    id_posicion: Optional[int] = Field(None, description="ID de la posición en el campo")
+    id_posicion: Optional[str] = Field(None, description="Posición en el campo (\"portero\", \"defensa\", \"mediocentro\", \"centrocampista\", \"delantero\")")
     titular: Optional[bool] = Field(None, description="Si el jugador es titular")
 
 
@@ -55,7 +55,7 @@ class AlineacionResponse(BaseModel):
         id_alineacion (int): ID de la alineación
         id_partido (int): ID del partido
         id_jugador (int): ID del jugador
-        id_posicion (int): ID de la posición
+        id_posicion (str): Posición en el campo
         titular (bool): Si el jugador es titular
         created_at (datetime): Fecha de creación
         updated_at (datetime): Fecha de última actualización
@@ -63,7 +63,7 @@ class AlineacionResponse(BaseModel):
     id_alineacion: int
     id_partido: int
     id_jugador: int
-    id_posicion: int
+    id_posicion: str
     titular: bool
     created_at: datetime
     updated_at: datetime
@@ -85,7 +85,7 @@ class JugadorAlineadoResponse(BaseModel):
         dorsal (int): Número de dorsal
         posicion_jugador (str): Posición habitual del jugador
         posicion_campo (str | None): Posición en el campo en este partido (obsoleto)
-        id_posicion (int): ID de la posición
+        id_posicion (str): Posición en el campo
         titular (bool): Si es titular
     """
     id_alineacion: int
@@ -94,7 +94,7 @@ class JugadorAlineadoResponse(BaseModel):
     dorsal: int
     posicion_jugador: str  # Posición habitual del jugador
     posicion_campo: Optional[str] = None  # Obsoleto: posición en el campo eliminada
-    id_posicion: int
+    id_posicion: str
     titular: bool
 
 
@@ -130,12 +130,14 @@ class AlineacionEquipoResponse(BaseModel):
         nombre_equipo (str): Nombre del equipo
         titulares (List[JugadorAlineadoResponse]): Jugadores titulares
         suplentes (List[JugadorAlineadoResponse]): Jugadores suplentes
+        updated_at (datetime | None): Timestamp de última actualización (para optimistic locking)
     """
     id_partido: int
     id_equipo: int
     nombre_equipo: str
     titulares: List[JugadorAlineadoResponse]
     suplentes: List[JugadorAlineadoResponse]
+    updated_at: Optional[datetime] = None
 
 
 class AlineacionBulkCreate(BaseModel):
@@ -145,6 +147,8 @@ class AlineacionBulkCreate(BaseModel):
     Attributes:
         id_partido (int): ID del partido
         alineaciones (List[AlineacionBase]): Lista de alineaciones a crear
+        updated_at (datetime | None): Timestamp de la última lectura (para optimistic locking)
     """
     id_partido: int = Field(..., description="ID del partido")
     alineaciones: List[AlineacionBase] = Field(..., description="Lista de alineaciones")
+    updated_at: Optional[datetime] = Field(None, description="Timestamp de la última lectura (optimistic locking)")

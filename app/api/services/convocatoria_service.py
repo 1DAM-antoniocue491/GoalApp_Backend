@@ -13,6 +13,8 @@ from app.models.partido import Partido
 from app.schemas.convocatoria import ConvocatoriaCreate, JugadorConvocadoResponse, ConvocatoriaPartidoResponse
 
 
+from datetime import timezone
+
 def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[ConvocatoriaPartido]:
     """
     Crea una convocatoria para un partido.
@@ -28,7 +30,8 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
         List[ConvocatoriaPartido]: Lista de convocatorias creadas
 
     Raises:
-        ValueError: Si el partido no existe, está iniciado o hay más de 11 titulares
+        ValueError: Si el partido no existe, está iniciado, hay más de 11 titulares,
+                   o los datos han sido modificados por otro usuario (optimistic locking)
     """
     # Verificar que el partido existe
     partido = db.query(Partido).filter(Partido.id_partido == datos.id_partido).first()
@@ -38,6 +41,26 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
     # Verificar que el partido no está iniciado o finalizado
     if partido.estado in ["En Juego", "Finalizado"]:
         raise ValueError(f"No se puede modificar convocatoria de partido {partido.estado.lower()}")
+
+    # Optimistic locking: verificar si los datos han sido modificados
+    if datos.updated_at is not None:
+        # Obtener el timestamp actual más reciente de la convocatoria
+        convocatoria_existente = db.query(ConvocatoriaPartido).join(
+            Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
+        ).filter(
+            ConvocatoriaPartido.id_partido == datos.id_partido
+        ).order_by(
+            ConvocatoriaPartido.updated_at.desc()
+        ).first()
+
+        if convocatoria_existente:
+            # Comparar timestamps (normalizar a UTC para comparación consistente)
+            timestamp_cliente = datos.updated_at.replace(tzinfo=timezone.utc) if datos.updated_at.tzinfo is None else datos.updated_at.astimezone(timezone.utc)
+            timestamp_bd = convocatoria_existente.updated_at.replace(tzinfo=timezone.utc) if convocatoria_existente.updated_at.tzinfo is None else convocatoria_existente.updated_at.astimezone(timezone.utc)
+
+            # Si el timestamp de BD es más reciente, rechazar la edición
+            if timestamp_bd > timestamp_cliente:
+                raise ValueError("Los datos han sido modificados por otro usuario. Por favor, recarga la página e inténtalo de nuevo.")
 
     # Contar titulares (máximo 11 por equipo)
     titulares = sum(1 for j in datos.jugadores if j.es_titular)
@@ -115,6 +138,11 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
     titulares = []
     suplentes = []
 
+    # Obtener el updated_at más reciente de todas las convocatorias
+    updated_at = None
+    if convocatorias:
+        updated_at = max(c.updated_at for c in convocatorias)
+
     for conv in convocatorias:
         # Ahora conv.jugador está cargado gracias a joinedload
         jugador = conv.jugador
@@ -134,7 +162,8 @@ def obtener_convocatoria_partido(db: Session, id_partido: int) -> ConvocatoriaPa
     return ConvocatoriaPartidoResponse(
         id_partido=id_partido,
         titulares=titulares,
-        suplentes=suplentes
+        suplentes=suplentes,
+        updated_at=updated_at
     )
 
 
@@ -181,6 +210,11 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
     titulares = []
     suplentes = []
 
+    # Obtener el updated_at más reciente de todas las convocatorias
+    updated_at = None
+    if convocatorias:
+        updated_at = max(c.updated_at for c in convocatorias)
+
     for conv in convocatorias:
         jugador = conv.jugador
         if jugador:
@@ -198,6 +232,10 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
 
     return ConvocatoriaPartidoResponse(
         id_partido=id_partido,
+        titulares=titulares,
+        suplentes=suplentes,
+        updated_at=updated_at
+    )
         titulares=titulares,
         suplentes=suplentes
     )

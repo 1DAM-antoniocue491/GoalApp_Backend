@@ -56,7 +56,7 @@ def crear_liga(db: Session, datos: LigaCreate, id_usuario_creador: int = None):
             UsuarioRol.id_liga == Liga.id_liga,
             Rol.nombre == "admin"
         ).first()
-        
+
         if ligas_usuario:
             raise ValueError(f"Ya tienes una liga con el nombre '{datos.nombre}'")
     liga = Liga(
@@ -291,8 +291,20 @@ def eliminar_liga(db: Session, liga_id: int):
         liga_id (int): ID de la liga a eliminar
 
     Raises:
-        ValueError: Si la liga no existe
+        ValueError: Si la liga no existe o tiene partidos en curso/finalizados
     """
+    # Verificar si existen partidos en curso o finalizados (no se pueden eliminar)
+    partidos_activos = db.query(Partido).filter(
+        Partido.id_liga == liga_id,
+        Partido.estado.in_(["En curso", "Finalizado"])
+    ).count()
+
+    if partidos_activos > 0:
+        raise ValueError(
+            f"No se puede eliminar la liga porque tiene {partidos_activos} partido(s) "
+            f"en curso o finalizados. Elimine o cancele todos los partidos primero."
+        )
+
     # Cargar la liga con todas sus relaciones para que cascade delete funcione
     liga = db.query(Liga).options(
         joinedload(Liga.equipos),

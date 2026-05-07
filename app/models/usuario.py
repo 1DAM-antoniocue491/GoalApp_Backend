@@ -61,3 +61,5 @@ class Usuario(Base):
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite
     usuario_roles = relationship("UsuarioRol", back_populates="usuario", lazy="raise", foreign_keys="UsuarioRol.id_usuario")
     roles = relationship("Rol", secondary="usuario_rol", back_populates="usuarios", lazy="raise")
+    # Relación con Jugador: cascade="all, delete-orphan" asegura que al eliminar usuario se elimine su jugador
+    jugador = relationship("Jugador", back_populates="usuario", lazy="raise", cascade="all, delete-orphan", uselist=False)

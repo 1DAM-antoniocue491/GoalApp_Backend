@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.dependencies import get_db, get_current_user
+from app.api.dependencies import get_db, get_current_user, require_role
+from fastapi import Depends
 from app.schemas.alineacion import (
     AlineacionCreate,
     AlineacionUpdate,
@@ -111,10 +112,11 @@ def crear_alineaciones_bulk_router(
         raise HTTPException(400, str(e))
 
 
-@router.get("/{id_alineacion}", response_model=AlineacionResponse, summary="Obtener alineación por ID")
+@router.get("/{id_alineacion}", response_model=AlineacionResponse, summary="Obtener alineación por ID", dependencies=[Depends(require_role("jugador"))])
 def obtener_alineacion_router(
     id_alineacion: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Obtiene una alineación por su ID.
@@ -122,11 +124,13 @@ def obtener_alineacion_router(
     Parámetros:
         - id_alineacion (int): ID de la alineación
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
 
     Returns:
-        AlineacionResponse: Información de the alineación
+        AlineacionResponse: Información de la alineación
 
-    Requiere autenticación: No
+    Requiere autenticación: Sí
+    Roles permitidos: Jugador, Coach, Delegate, Admin
 
     Raises:
         HTTPException 404: Si la alineación no existe
@@ -137,10 +141,11 @@ def obtener_alineacion_router(
     return alineacion
 
 
-@router.get("/partido/{id_partido}", response_model=List[AlineacionResponse], summary="Obtener alineaciones de un partido")
+@router.get("/partido/{id_partido}", response_model=List[AlineacionResponse], summary="Obtener alineaciones de un partido", dependencies=[Depends(require_role("jugador"))])
 def obtener_alineaciones_partido_router(
     id_partido: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Obtiene todas las alineaciones de un partido.
@@ -148,11 +153,13 @@ def obtener_alineaciones_partido_router(
     Parámetros:
         - id_partido (int): ID del partido
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
 
     Returns:
         List[AlineacionResponse]: Lista de alineaciones del partido
 
-    Requiere autenticación: No
+    Requiere autenticación: Sí
+    Roles permitidos: Jugador, Coach, Delegate, Admin
 
     Raises:
         HTTPException 404: Si el partido no existe
@@ -166,12 +173,14 @@ def obtener_alineaciones_partido_router(
 @router.get(
     "/partido/{id_partido}/equipo/{id_equipo}",
     response_model=AlineacionEquipoResponse,
-    summary="Obtener alineación de un equipo en un partido"
+    summary="Obtener alineación de un equipo en un partido",
+    dependencies=[Depends(require_role("jugador"))]
 )
 def obtener_alineacion_equipo_router(
     id_partido: int,
     id_equipo: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Obtiene la alineación de un equipo específico en un partido.
@@ -182,11 +191,13 @@ def obtener_alineacion_equipo_router(
         - id_partido (int): ID del partido
         - id_equipo (int): ID del equipo
         - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
 
     Returns:
         AlineacionEquipoResponse: Alineación del equipo
 
-    Requiere autenticación: No
+    Requiere autenticación: Sí
+    Roles permitidos: Jugador, Coach, Delegate, Admin
 
     Raises:
         HTTPException 404: Si el partido o equipo no existen

@@ -38,9 +38,10 @@ class ConvocatoriaPartido(Base):
     # Información de la convocatoria
     es_titular = Column(Boolean, nullable=False, default=False)  # False = suplente
 
-    # Auditoría: fecha de creación
+    # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends
     created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relaciones ORM
     # lazy="raise" evita cargas accidentales - usar joinedload() explicitamente cuando se necesite

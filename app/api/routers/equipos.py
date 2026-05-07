@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db, require_role, get_current_user
 from app.models.usuario import Usuario
-from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoResponse, EquipoRendimientoResponse
+from app.schemas.equipo import EquipoCreate, EquipoUpdate, EquipoResponse, EquipoRendimientoResponse, EquipoMinimalResponse
 from app.api.services.equipo_service import (
     crear_equipo,
     obtener_equipos,
+    obtener_equipos_minimal,
     obtener_equipo_por_id,
     actualizar_equipo,
     eliminar_equipo,
@@ -83,6 +84,28 @@ def listar_equipos(liga_id: int = None, db: Session = Depends(get_db)):
     Roles permitidos: Público
     """
     return obtener_equipos(db, liga_id)
+
+
+@router.get("/minimal", response_model=list[EquipoMinimalResponse])
+def listar_equipos_minimal(liga_id: int = None, db: Session = Depends(get_db)):
+    """
+    Listar todos los equipos con datos mínimos (solo id, nombre, escudo), opcionalmente filtrados por liga.
+
+    Endpoint ligero que devuelve solo los campos esenciales para listados rápidos.
+    Ideal para selects, dropdowns y listas donde no se necesita información detallada.
+
+    Parámetros:
+        - liga_id (int, optional): ID de la liga para filtrar (query parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        List[EquipoMinimalResponse]: Lista de equipos con id_equipo, nombre y escudo
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+    """
+    return obtener_equipos_minimal(db, liga_id)
+
 
 @router.get("/{equipo_id}", response_model=EquipoResponse)
 def obtener_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
@@ -170,9 +193,16 @@ def eliminar_equipo_router(equipo_id: int, db: Session = Depends(get_db)):
 
     Requiere autenticación: Sí
     Roles permitidos: Admin
+
+    Raises:
+        HTTPException 404: Si el equipo no existe
+        HTTPException 400: Si eliminar el equipo deja la liga con menos de 2 equipos
     """
-    eliminar_equipo(db, equipo_id)
-    return {"mensaje": "Equipo eliminado correctamente"}
+    try:
+        eliminar_equipo(db, equipo_id)
+        return {"mensaje": "Equipo eliminado correctamente"}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/{equipo_id}/detalle")

@@ -10,6 +10,7 @@ from app.api.dependencies import get_db, require_role, get_current_user
 from app.models.usuario import Usuario
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioResponse, LigaConRolResponse, UsuarioConRolEnLigaResponse
 from app.schemas.seguimiento import SeguimientoResponse, LigaSeguidaResponse
+from app.schemas.gestion_usuarios import UsuarioRolUpdate, UsuarioEstadoUpdate, UsuarioLigaResponse
 from app.api.services.usuario_service import (
     crear_usuario,
     obtener_usuario_por_id,
@@ -21,7 +22,11 @@ from app.api.services.usuario_service import (
     obtener_ligas_seguidas,
     obtener_ligas_con_rol,
     obtener_usuarios_con_rol_en_liga,
-    relevo_admin
+    relevo_admin,
+    cambiar_rol_en_liga,
+    eliminar_asignacion_liga,
+    cambiar_estado_usuario_en_liga,
+    obtener_usuarios_con_roles
 )
 
 # Configuración del router
@@ -276,6 +281,7 @@ def obtener_ligas_usuario_router(
 @router.get("/ligas/{liga_id}/usuarios", response_model=list[UsuarioConRolEnLigaResponse])
 def obtener_usuarios_con_rol(
     liga_id: int,
+    solo_activos: bool = False,
     db: Session = Depends(get_db)
 ):
     """
@@ -286,6 +292,7 @@ def obtener_usuarios_con_rol(
 
     Parámetros:
         - liga_id (int): ID de la liga (path parameter)
+        - solo_activos (bool): Si True, filtra solo usuarios activos
         - db (Session): Sesión de base de datos
 
     Returns:
@@ -294,7 +301,7 @@ def obtener_usuarios_con_rol(
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_usuarios_con_rol_en_liga(db, liga_id)
+    return obtener_usuarios_con_rol_en_liga(db, liga_id, solo_activos=solo_activos)
 
 
 @router.get("/ligas/{liga_id}/stats")
@@ -334,6 +341,173 @@ def obtener_stats_usuarios(
         "pendientes": pendientes,
         "admin_activos": admin_activos
     }
+
+
+# ============================================================
+# GESTIÓN DE USUARIOS DE LIGA (ADMIN)
+# ============================================================
+
+@router.put("/{usuario_id}/rol", response_model=UsuarioLigaResponse, dependencies=[Depends(require_role("admin"))])
+def cambiar_rol_usuario(
+    usuario_id: int,
+    datos: UsuarioRolUpdate,
+    liga_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Cambiar el rol de un usuario en una liga específica.
+
+    Permite a un administrador modificar el rol asignado a un usuario dentro de una liga.
+    Útil para promover/degradar usuarios entre diferentes niveles de permiso.
+
+    Parámetros:
+        - usuario_id (int): ID del usuario (path parameter)
+        - liga_id (int): ID de la liga (query parameter)
+        - datos (UsuarioRolUpdate): {"id_rol": int} con el nuevo rol a asignar
+
+    Returns:
+        UsuarioLigaResponse: Información actualizada del usuario con su nuevo rol
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si el usuario no tiene rol asignado o el rol no existe
+        HTTPException 404: Si la liga no existe
+    """
+    try:
+        asignacion = cambiar_rol_en_liga(db, usuario_id, liga_id, datos.id_rol)
+        return UsuarioLigaResponse(
+            id_usuario_rol=asignacion.id_usuario_rol,
+            id_usuario=asignacion.id_usuario,
+            nombre_usuario=asignacion.usuario.nombre,
+            email=asignacion.usuario.email,
+            id_rol=asignacion.id_rol,
+            nombre_rol=asignacion.rol.nombre,
+            activo=asignacion.activo
+        )
+    except ValueError as e:
+        if "no encontrada" in str(e) or "no encontrado" in str(e):
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{usuario_id}/liga", dependencies=[Depends(require_role("admin"))])
+def eliminar_usuario_de_liga(
+    usuario_id: int,
+    liga_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Eliminar la asignación de un usuario en una liga específica.
+
+    Remueve completamente la relación entre el usuario y la liga, eliminando
+    cualquier rol que tuviera asignado.
+
+    Parámetros:
+        - usuario_id (int): ID del usuario (path parameter)
+        - liga_id (int): ID de la liga (query parameter)
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si el usuario no tiene un rol asignado en esa liga
+    """
+    try:
+        eliminar_asignacion_liga(db, usuario_id, liga_id)
+        return {"mensaje": "Usuario eliminado de la liga correctamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{usuario_id}/estado", response_model=UsuarioLigaResponse, dependencies=[Depends(require_role("admin"))])
+def cambiar_estado_usuario(
+    usuario_id: int,
+    datos: UsuarioEstadoUpdate,
+    liga_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Activar o desactivar un usuario en una liga específica.
+
+    Permite a un administrador cambiar el estado de un usuario entre activo e inactivo.
+    Los usuarios inactivos no pueden realizar acciones en la liga pero mantienen su rol.
+
+    Parámetros:
+        - usuario_id (int): ID del usuario (path parameter)
+        - liga_id (int): ID de la liga (query parameter)
+        - datos (UsuarioEstadoUpdate): {"activo": bool}
+
+    Returns:
+        UsuarioLigaResponse: Información actualizada del usuario con su nuevo estado
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si el usuario no tiene un rol asignado en esa liga
+    """
+    try:
+        asignacion = cambiar_estado_usuario_en_liga(db, usuario_id, liga_id, datos.activo)
+        return UsuarioLigaResponse(
+            id_usuario_rol=asignacion.id_usuario_rol,
+            id_usuario=asignacion.id_usuario,
+            nombre_usuario=asignacion.usuario.nombre,
+            email=asignacion.usuario.email,
+            id_rol=asignacion.id_rol,
+            nombre_rol=asignacion.rol.nombre,
+            activo=asignacion.activo
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/ligas/{liga_id}/roles", response_model=list[UsuarioLigaResponse], dependencies=[Depends(require_role("admin"))])
+def listar_usuarios_con_roles(
+    liga_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Listar todos los usuarios con sus roles asignados en una liga específica.
+
+    Devuelve información completa de cada usuario incluyendo su rol actual
+    y estado de activación dentro de la liga.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        List[UsuarioLigaResponse]: Lista de usuarios con sus roles en la liga
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 404: Si la liga no existe
+    """
+    try:
+        usuarios = obtener_usuarios_con_roles(db, liga_id)
+        return [
+            UsuarioLigaResponse(
+                id_usuario_rol=u["id_usuario_rol"],
+                id_usuario=u["id_usuario"],
+                nombre_usuario=u["nombre_usuario"],
+                email=u["email"],
+                id_rol=u["id_rol"],
+                nombre_rol=u["nombre_rol"],
+                activo=u["activo"]
+            )
+            for u in usuarios
+        ]
+    except ValueError as e:
+        if "no encontrada" in str(e):
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ============================================================
 # RELEVO DE ADMINISTRADOR

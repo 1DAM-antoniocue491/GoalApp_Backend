@@ -113,3 +113,21 @@ class EquipoRendimientoResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EquipoMinimalResponse(BaseModel):
+    """
+    Schema de respuesta mínima para un equipo.
+    Incluye solo los campos esenciales para listados ligeros.
+
+    Attributes:
+        id_equipo (int): Identificador único del equipo
+        nombre (str): Nombre del equipo
+        escudo (str | None): URL o path del escudo del equipo
+    """
+    id_equipo: int
+    nombre: str
+    escudo: str | None
+
+    class Config:
+        from_attributes = True

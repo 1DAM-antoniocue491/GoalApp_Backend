@@ -5,9 +5,10 @@ marcadores, fechas y estados del partido.
 """
 from sqlalchemy.orm import Session, selectinload, aliased
 from sqlalchemy import func, and_
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from itertools import combinations
 import json
+import math
 from app.models.partido import Partido
 from app.models.equipo import Equipo
 from app.models.jornada import Jornada
@@ -24,19 +25,82 @@ from app.api.services.notificacion_service import notificar_usuarios_liga, notif
 def crear_partido(db: Session, datos: PartidoCreate):
     """
     Crea un nuevo partido en la base de datos.
-    
+    Si no se proporciona id_jornada, busca o crea una jornada automática para esa fecha.
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         datos (PartidoCreate): Datos del partido (liga, equipos, fecha, estado, goles)
-    
+
     Returns:
         Partido: Objeto Partido creado con su ID asignado
+
+    Raises:
+        ValueError: Si la fecha no es futura, equipos son iguales o ya existe partido duplicado
     """
+    # Validar fecha futura
+    if datos.fecha < datetime.now(timezone.utc).replace(tzinfo=None):
+        raise ValueError("La fecha del partido debe ser futura")
+
+    # Validar que los equipos sean diferentes
+    if datos.id_equipo_local == datos.id_equipo_visitante:
+        raise ValueError("El equipo local y visitante deben ser diferentes")
+
+    # Validar que no exista un partido duplicado en la misma liga
+    duplicado = db.query(Partido).filter(
+        Partido.id_liga == datos.id_liga,
+        Partido.id_equipo_local == datos.id_equipo_local,
+        Partido.id_equipo_visitante == datos.id_equipo_visitante,
+        Partido.fecha == datos.fecha
+    ).first()
+
+    if duplicado:
+        raise ValueError("Ya existe un partido programado entre estos equipos en esta fecha")
+
+    # Validar que no haya enfrentamiento inverso en la misma fecha
+    duplicado_inverso = db.query(Partido).filter(
+        Partido.id_liga == datos.id_liga,
+        Partido.id_equipo_local == datos.id_equipo_visitante,
+        Partido.id_equipo_visitante == datos.id_equipo_local,
+        Partido.fecha == datos.fecha
+    ).first()
+
+    if duplicado_inverso:
+        raise ValueError("Ya existe un enfrentamiento entre estos equipos en esta fecha")
+
+    # Determinar id_jornada: usar proporcionado o auto-asignar
+    id_jornada = datos.id_jornada
+
+    if id_jornada is None:
+        # Buscar o crear jornada para la fecha del partido
+        fecha_partido = datos.fecha
+        jornada_existente = db.query(Jornada).filter(
+            Jornada.id_liga == datos.id_liga,
+            Jornada.fecha_inicio <= fecha_partido,
+            Jornada.fecha_fin >= fecha_partido
+        ).first()
+
+        if jornada_existente:
+            id_jornada = jornada_existente.id_jornada
+        else:
+            # Crear nueva jornada "manual" para esta fecha
+            fecha_str = fecha_partido.strftime('%Y-%m-%d')
+            jornada_manual = Jornada(
+                id_liga=datos.id_liga,
+                numero=-1,  # Número especial para jornadas manuales
+                nombre=f"Jornada Manual {fecha_str}",
+                fecha_inicio=fecha_partido,
+                fecha_fin=fecha_partido + timedelta(hours=2)
+            )
+            db.add(jornada_manual)
+            db.flush()  # Obtener ID generado
+            id_jornada = jornada_manual.id_jornada
+
     partido = Partido(
         id_liga=datos.id_liga,
         id_equipo_local=datos.id_equipo_local,
         id_equipo_visitante=datos.id_equipo_visitante,
         fecha=datos.fecha,
+        id_jornada=id_jornada,  # Siempre asignado (proporcionado o auto-generado)
         estado=datos.estado,
         goles_local=datos.goles_local,
         goles_visitante=datos.goles_visitante
@@ -462,8 +526,12 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
     if len(equipos_lista) % 2 != 0:
         equipos_lista.append(None)
 
+    # Calcular distribución de partidos por día
+    dias_seleccionados = len(config.dias_partido)
+    partidos_por_dia = math.ceil(partidos_por_jornada / dias_seleccionados) if dias_seleccionados > 0 else partidos_por_jornada
+
     for jornada_idx in range(num_jornadas):
-        # Encontrar fecha válida para esta jornada
+        # Encontrar primer día válido para esta jornada
         while True:
             dia_semana = fecha_actual.weekday()
             dia_backend = dia_semana + 1 if dia_semana < 6 else 0
@@ -473,8 +541,28 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
 
         id_jornada = jornadas_ida[jornada_idx]
 
-        # Generar emparejamientos de esta jornada
+        # Crear partidos distribuidos en los días seleccionados
+        dia_index = 0
+        partidos_en_dia_actual = 0
+        fecha_jornada_actual = fecha_actual
+
         for i in range(partidos_por_jornada):
+            # Avanzar al siguiente día si se completó el cupo del día actual
+            if partidos_en_dia_actual >= partidos_por_dia and dias_seleccionados > 1:
+                dia_index = (dia_index + 1) % dias_seleccionados
+                partidos_en_dia_actual = 0
+
+                # Avanzar fecha al siguiente día válido
+                fecha_jornada_actual += timedelta(days=1)
+                while True:
+                    dia_semana = fecha_jornada_actual.weekday()
+                    dia_backend = dia_semana + 1 if dia_semana < 6 else 0
+                    if dia_backend in config.dias_partido:
+                        break
+                    fecha_jornada_actual += timedelta(days=1)
+
+            # Crear partido con la fecha calculada
+            fecha_partido = fecha_jornada_actual.replace(hour=hora, minute=minuto)
             local_idx = i
             visitante_idx = num_equipos - 1 - i
 
@@ -485,8 +573,6 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             if local is None or visitante is None:
                 continue
 
-            # Crear partido con la fecha calculada
-            fecha_partido = fecha_actual.replace(hour=hora, minute=minuto)
             partido = Partido(
                 id_liga=liga_id,
                 id_jornada=id_jornada,
@@ -499,10 +585,12 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             )
             db.add(partido)
             partidos_creados += 1
+            partidos_en_dia_actual += 1
 
         # Rotar equipos para la siguiente jornada (algoritmo round-robin)
         equipos_lista = [equipos_lista[0]] + [equipos_lista[-1]] + equipos_lista[1:-1]
-        fecha_actual += timedelta(weeks=1)
+        # Avanzar fecha_actual para la próxima jornada (semana siguiente desde el último día usado)
+        fecha_actual = fecha_jornada_actual + timedelta(days=1)
 
     # Si es ida y vuelta, crear la vuelta
     if config.tipo == "ida_vuelta":
@@ -532,8 +620,12 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
 
         # Crear partidos de vuelta
         fecha_actual = fecha_inicio + timedelta(weeks=num_jornadas)
+
+        # Calcular distribución de partidos por día para vuelta
+        partidos_por_dia_vuelta = math.ceil(partidos_por_jornada / dias_seleccionados) if dias_seleccionados > 0 else partidos_por_jornada
+
         for jornada_idx in range(num_jornadas):
-            # Encontrar fecha válida
+            # Encontrar primer día válido para esta jornada
             while True:
                 dia_semana = fecha_actual.weekday()
                 dia_backend = dia_semana + 1 if dia_semana < 6 else 0
@@ -543,7 +635,28 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
 
             id_jornada = jornadas_vuelta[jornada_idx]
 
+            # Crear partidos distribuidos en los días seleccionados
+            dia_index = 0
+            partidos_en_dia_actual = 0
+            fecha_jornada_actual = fecha_actual
+
             for i in range(partidos_por_jornada):
+                # Avanzar al siguiente día si se completó el cupo del día actual
+                if partidos_en_dia_actual >= partidos_por_dia_vuelta and dias_seleccionados > 1:
+                    dia_index = (dia_index + 1) % dias_seleccionados
+                    partidos_en_dia_actual = 0
+
+                    # Avanzar fecha al siguiente día válido
+                    fecha_jornada_actual += timedelta(days=1)
+                    while True:
+                        dia_semana = fecha_jornada_actual.weekday()
+                        dia_backend = dia_semana + 1 if dia_semana < 6 else 0
+                        if dia_backend in config.dias_partido:
+                            break
+                        fecha_jornada_actual += timedelta(days=1)
+
+                # Invertir localía para la vuelta
+                fecha_partido = fecha_jornada_actual.replace(hour=hora, minute=minuto)
                 local_idx = i
                 visitante_idx = num_equipos - 1 - i
 
@@ -553,8 +666,6 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                 if local is None or visitante is None:
                     continue
 
-                # Invertir localía para la vuelta
-                fecha_partido = fecha_actual.replace(hour=hora, minute=minuto)
                 partido = Partido(
                     id_liga=liga_id,
                     id_jornada=id_jornada,
@@ -567,10 +678,12 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                 )
                 db.add(partido)
                 partidos_creados += 1
+                partidos_en_dia_actual += 1
 
             # Rotar equipos
             equipos_lista = [equipos_lista[0]] + [equipos_lista[-1]] + equipos_lista[1:-1]
-            fecha_actual += timedelta(weeks=1)
+            # Avanzar fecha_actual para la próxima jornada
+            fecha_actual = fecha_jornada_actual + timedelta(days=1)
 
     db.commit()
 
@@ -728,12 +841,13 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     """
     Inicia un partido cambiando su estado a 'en_juego'.
 
-    Validaciones:
-    - Usuario es admin o delegado asignado al partido
-    - Partido está en estado 'programado'
-    - Fecha del partido >= hoy
-    - Ambos equipos tienen exactamente 11 titulares en la convocatoria
-    - Ambos equipos tienen al menos 1 portero entre los titulares
+    Validaciones (en orden):
+    1. Partido existe
+    2. Partido está en estado 'programado'
+    3. Usuario es entrenador o delegado de alguno de los equipos
+    4. Fecha/hora del partido ha llegado
+    5. Ambos equipos tienen exactamente 11 titulares en la convocatoria
+    6. Ambos equipos tienen al menos 1 portero entre los titulares
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
@@ -745,6 +859,7 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
 
     Raises:
         ValueError: Si el partido no existe, no está en estado programado,
+                   el usuario no tiene permisos, la fecha no ha llegado,
                    o los equipos no tienen la convocatoria requerida
     """
     # Obtener partido con relaciones
@@ -756,8 +871,26 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     if partido.estado != "programado":
         raise ValueError(f"El partido debe estar en estado 'programado', estado actual: {partido.estado}")
 
+    # Validar permisos: solo entrenador o delegado de alguno de los equipos puede iniciar
+    # Cargar equipos para obtener entrenador y delegado
+    equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
+    equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+
+    if not equipo_local or not equipo_visitante:
+        raise ValueError("Uno o ambos equipos no existen")
+
+    es_entrenador_o_delegado = (
+        usuario_id == equipo_local.id_entrenador or
+        usuario_id == equipo_local.id_delegado or
+        usuario_id == equipo_visitante.id_entrenador or
+        usuario_id == equipo_visitante.id_delegado
+    )
+    if not es_entrenador_o_delegado:
+        raise ValueError("Solo el entrenador o delegado de los equipos puede iniciar el partido")
+
     # Validar que la fecha/hora del partido haya llegado
-    ahora = datetime.now()
+    # Usar timezone.utc para comparar correctamente con partido.fecha (DateTime con timezone)
+    ahora = datetime.now(timezone.utc)
     if partido.fecha > ahora:
         raise ValueError("La fecha/hora del partido aún no ha llegado")
 
@@ -906,7 +1039,31 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
     partido.goles_visitante = datos.goles_visitante
     partido.estado = "finalizado"
 
-    # Validar que el jugador MVP estuvo convocado al partido
+    # Validación MVP - Verificar que ambos equipos tienen jugadores válidos en campo
+    # 1. Validar mínimo 5 jugadores por equipo (mínimo reglamentario)
+    for id_equipo in [partido.id_equipo_local, partido.id_equipo_visitante]:
+        # Obtener jugadores que estuvieron "jugando" en algún momento del partido
+        jugadores_en_campo = db.query(EstadoJugadorPartido).filter(
+            EstadoJugadorPartido.id_partido == partido_id,
+            EstadoJugadorPartido.id_equipo == id_equipo,
+            EstadoJugadorPartido.estado == "jugando"
+        ).all()
+
+        if len(jugadores_en_campo) < 5:
+            raise ValueError(f"El equipo {id_equipo} debe tener al menos 5 jugadores en campo para finalizar el partido, solo tiene {len(jugadores_en_campo)}")
+
+        # 2. Validar que los jugadores existen y pertenecen al equipo correcto
+        ids_jugadores = [e.id_jugador for e in jugadores_en_campo]
+        jugadores_validos = db.query(Jugador).filter(
+            Jugador.id_jugador.in_(ids_jugadores),
+            Jugador.id_equipo == id_equipo,
+            Jugador.activo == True
+        ).all()
+
+        if len(jugadores_validos) != len(jugadores_en_campo):
+            raise ValueError(f"El equipo {id_equipo} tiene jugadores no válidos o que no pertenecen al equipo")
+
+    # 3. Validar que el jugador MVP estuvo convocado al partido
     convocatoria_mvp = db.query(ConvocatoriaPartido).filter(
         ConvocatoriaPartido.id_partido == partido_id,
         ConvocatoriaPartido.id_jugador == datos.id_mvp
@@ -914,6 +1071,15 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
 
     if not convocatoria_mvp:
         raise ValueError("El jugador seleccionado como MVP no estuvo convocado en este partido")
+
+    # 4. Validar que el MVP pertenece a uno de los equipos del partido
+    mvp_pertenece_equipo = db.query(Jugador).filter(
+        Jugador.id_jugador == datos.id_mvp,
+        Jugador.id_equipo.in_([partido.id_equipo_local, partido.id_equipo_visitante])
+    ).first()
+
+    if not mvp_pertenece_equipo:
+        raise ValueError("El jugador MVP no pertenece a ninguno de los equipos del partido")
 
     # Crear evento MVP
     mvp_evento = EventoPartido(

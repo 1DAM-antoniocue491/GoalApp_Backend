@@ -247,7 +247,7 @@ def desactivar_liga_router(liga_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{liga_id}/usuarios", response_model=list[UsuarioLigaResponse])
-def listar_usuarios_liga(liga_id: int, db: Session = Depends(get_db)):
+def listar_usuarios_liga(liga_id: int, solo_activos: bool = False, db: Session = Depends(get_db)):
     """
     Listar todos los usuarios de una liga con sus roles y estados.
 
@@ -256,6 +256,7 @@ def listar_usuarios_liga(liga_id: int, db: Session = Depends(get_db)):
 
     Parámetros:
         - liga_id (int): ID de la liga (path parameter)
+        - solo_activos (bool): Si True, filtra solo usuarios activos
         - db (Session): Sesión de base de datos
 
     Returns:
@@ -264,7 +265,7 @@ def listar_usuarios_liga(liga_id: int, db: Session = Depends(get_db)):
     Requiere autenticación: No
     Roles permitidos: Público
     """
-    return obtener_usuarios_liga(db, liga_id)
+    return obtener_usuarios_liga(db, liga_id, solo_activos=solo_activos)
 
 
 @router.put("/{liga_id}/usuarios/{usuario_id}/rol", response_model=UsuarioLigaResponse, dependencies=[Depends(require_role("admin"))])

@@ -39,9 +39,9 @@ class EstadoJugadorPartido(Base):
     id_estado = Column(Integer, primary_key=True)
 
     # Relaciones: partido, jugador y equipo
-    id_partido = Column(Integer, ForeignKey("partidos.id_partido"), nullable=False)
-    id_jugador = Column(Integer, ForeignKey("jugadores.id_jugador"), nullable=False)
-    id_equipo = Column(Integer, ForeignKey("equipos.id_equipo"), nullable=False)
+    id_partido = Column(Integer, ForeignKey("partidos.id_partido", ondelete="CASCADE"), nullable=False)
+    id_jugador = Column(Integer, ForeignKey("jugadores.id_jugador", ondelete="CASCADE"), nullable=False)
+    id_equipo = Column(Integer, ForeignKey("equipos.id_equipo", ondelete="CASCADE"), nullable=False)
 
     # Estado actual del jugador
     estado = Column(String(20), nullable=False, default="suplente")  # 'jugando', 'suplente', 'lesionado', 'expulsado'

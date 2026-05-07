@@ -218,18 +218,35 @@ def actualizar_usuario(db: Session, usuario_id: int, datos: UsuarioUpdate):
 
 def eliminar_usuario(db: Session, usuario_id: int):
     """
-    Elimina un usuario del sistema.
-    
+    Elimina un usuario del sistema junto con sus dependencias (jugador, tokens, etc.).
+
+    Carga las relaciones del usuario para asegurar que cascade delete funcione correctamente.
+
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         usuario_id (int): ID del usuario a eliminar
-    
+
     Raises:
         ValueError: Si el usuario no existe
     """
-    usuario = obtener_usuario_por_id(db, usuario_id)
+    from sqlalchemy.orm import joinedload
+    from app.models.jugador import Jugador
+    from app.models.token_recuperacion import TokenRecuperacion
+
+    # Cargar usuario con sus relaciones para cascade delete
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.jugador),
+        joinedload(Usuario.usuario_roles)
+    ).filter(Usuario.id_usuario == usuario_id).first()
+
     if not usuario:
         raise ValueError("Usuario no encontrado")
+
+    # Eliminar dependencias explícitamente para asegurar cascade
+    # Tokens de recuperación
+    db.query(TokenRecuperacion).filter(
+        TokenRecuperacion.id_usuario == usuario_id
+    ).delete(synchronize_session=False)
 
     db.delete(usuario)
     db.commit()
@@ -287,6 +304,160 @@ def asignar_rol_a_usuario(db: Session, usuario_id: int, rol_id: int, id_liga: in
     db.add(asignacion)
     db.commit()
     return True
+
+
+def cambiar_rol_en_liga(db: Session, usuario_id: int, liga_id: int, nuevo_rol_id: int):
+    """
+    Cambia el rol de un usuario en una liga específica.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        usuario_id (int): ID del usuario
+        liga_id (int): ID de la liga
+        nuevo_rol_id (int): ID del nuevo rol a asignar
+
+    Returns:
+        UsuarioRol: La asignación actualizada
+
+    Raises:
+        ValueError: Si el usuario no tiene un rol asignado en esa liga, o si el nuevo rol no existe
+    """
+    from app.models.liga import Liga
+
+    # Verificar que la liga existe
+    liga = db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    # Verificar que el nuevo rol existe
+    nuevo_rol = db.query(Rol).filter(Rol.id_rol == nuevo_rol_id).first()
+    if not nuevo_rol:
+        raise ValueError("Rol no encontrado")
+
+    # Buscar la asignación actual del usuario en la liga
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise ValueError("El usuario no tiene un rol asignado en esta liga")
+
+    # Actualizar el rol
+    asignacion.id_rol = nuevo_rol_id
+    db.commit()
+    db.refresh(asignacion)
+
+    return asignacion
+
+
+def eliminar_asignacion_liga(db: Session, usuario_id: int, liga_id: int):
+    """
+    Elimina la asignación de un usuario en una liga específica.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        usuario_id (int): ID del usuario
+        liga_id (int): ID de la liga
+
+    Returns:
+        bool: True si se eliminó correctamente
+
+    Raises:
+        ValueError: Si el usuario no tiene un rol asignado en esa liga
+    """
+    # Buscar la asignación
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise ValueError("El usuario no tiene un rol asignado en esta liga")
+
+    db.delete(asignacion)
+    db.commit()
+
+    return True
+
+
+def cambiar_estado_usuario_en_liga(db: Session, usuario_id: int, liga_id: int, activo: bool):
+    """
+    Cambia el estado (activo/inactivo) de un usuario en una liga específica.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        usuario_id (int): ID del usuario
+        liga_id (int): ID de la liga
+        activo (bool): Nuevo estado (True=activo, False=inactivo)
+
+    Returns:
+        UsuarioRol: La asignación actualizada
+
+    Raises:
+        ValueError: Si el usuario no tiene un rol asignado en esa liga
+    """
+    # Buscar la asignación
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if not asignacion:
+        raise ValueError("El usuario no tiene un rol asignado en esta liga")
+
+    # Actualizar el estado
+    asignacion.activo = activo
+    db.commit()
+    db.refresh(asignacion)
+
+    return asignacion
+
+
+def obtener_usuarios_con_roles(db: Session, liga_id: int):
+    """
+    Obtiene todos los usuarios con sus roles asignados en una liga específica.
+
+    Args:
+        db (Session): Sesión de base de datos SQLAlchemy
+        liga_id (int): ID de la liga
+
+    Returns:
+        list[dict]: Lista de diccionarios con información de usuario y rol
+
+    Raises:
+        ValueError: Si la liga no existe
+    """
+    from app.models.liga import Liga
+
+    # Verificar que la liga existe
+    liga = db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    if not liga:
+        raise ValueError("Liga no encontrada")
+
+    # Query con join para obtener usuario + rol + estado
+    resultados = (
+        db.query(Usuario, Rol, UsuarioRol)
+        .join(UsuarioRol, UsuarioRol.id_usuario == Usuario.id_usuario)
+        .join(Rol, Rol.id_rol == UsuarioRol.id_rol)
+        .filter(UsuarioRol.id_liga == liga_id)
+        .all()
+    )
+
+    # Construir lista de respuestas
+    usuarios_con_roles = []
+    for usuario, rol, asignacion in resultados:
+        usuarios_con_roles.append({
+            "id_usuario_rol": asignacion.id_usuario_rol,
+            "id_usuario": usuario.id_usuario,
+            "nombre_usuario": usuario.nombre,
+            "email": usuario.email,
+            "id_rol": rol.id_rol,
+            "nombre_rol": rol.nombre,
+            "activo": asignacion.activo
+        })
+
+    return usuarios_con_roles
 
 # ============================================================
 # RECUPERACIÓN DE CONTRASEÑA
@@ -571,27 +742,39 @@ def obtener_ligas_con_rol(db: Session, usuario_id: int):
         .all()
     )
 
+    if not resultados:
+        return []
+
+    # Extraer IDs de ligas para contar equipos en batch (evitar N+1)
+    ids_ligas = [liga.id_liga for liga, _ in resultados]
+
+    # Contar equipos de todas las ligas en una sola query con GROUP BY
+    equipos_count_query = (
+        db.query(Equipo.id_liga, func.count(Equipo.id_equipo).label('total'))
+        .filter(Equipo.id_liga.in_(ids_ligas))
+        .group_by(Equipo.id_liga)
+        .all()
+    )
+
+    # Mapa: id_liga -> count de equipos
+    equipos_map = {id_liga: total for id_liga, total in equipos_count_query}
+
     # Construir lista de respuestas con datos de liga y rol
     ligas_con_rol = []
     for liga, rol in resultados:
-        # Contar equipos de esta liga
-        equipos_count = db.query(func.count(Equipo.id_equipo)).filter(
-            Equipo.id_liga == liga.id_liga
-        ).scalar() or 0
-
         ligas_con_rol.append({
             "id_liga": liga.id_liga,
             "nombre": liga.nombre,
             "temporada": liga.temporada,
             "activa": liga.activa,
             "rol": rol.nombre,
-            "equipos_total": equipos_count
+            "equipos_total": equipos_map.get(liga.id_liga, 0)
         })
 
     return ligas_con_rol
 
 
-def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
+def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int, solo_activos: bool = False):
     """
     Obtiene todos los usuarios que tienen un rol asignado en una liga específica.
 
@@ -601,6 +784,7 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
     Args:
         db (Session): Sesion de base de datos SQLAlchemy
         liga_id (int): ID de la liga
+        solo_activos (bool): Si True, filtra solo usuarios con estado activo
 
     Returns:
         List[dict]: Lista de diccionarios con datos del usuario y su rol en la liga.
@@ -614,6 +798,7 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
                      - id_equipo: ID del equipo (si aplica)
                      - nombre_equipo: Nombre del equipo (si aplica)
     """
+    from sqlalchemy.orm import joinedload, selectinload
     from app.models.usuario_rol import UsuarioRol
     from app.models.usuario import Usuario
     from app.models.rol import Rol
@@ -621,13 +806,64 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
     from app.models.equipo import Equipo
 
     # Query con join para obtener usuario + rol + estado activo en la liga
-    resultados = (
+    query = (
         db.query(Usuario, Rol, UsuarioRol.activo, UsuarioRol.id_usuario)
         .join(UsuarioRol, UsuarioRol.id_usuario == Usuario.id_usuario)
         .join(Rol, Rol.id_rol == UsuarioRol.id_rol)
         .filter(UsuarioRol.id_liga == liga_id)
+    )
+
+    # Filtrar solo activos si se solicita
+    if solo_activos:
+        query = query.filter(UsuarioRol.activo == True)
+
+    resultados = query.all()
+
+    if not resultados:
+        return []
+
+    # Extraer IDs de usuario para cargar datos relacionados en batch (evitar N+1)
+    ids_usuarios = [id_usuario for _, _, _, id_usuario in resultados]
+
+    # Cargar todos los jugadores de esta liga en una sola query (selectinload manual)
+    jugadores = (
+        db.query(Jugador)
+        .filter(Jugador.id_usuario.in_(ids_usuarios), Jugador.id_liga == liga_id)
         .all()
     )
+    # Mapa: id_usuario -> jugador
+    jugadores_map = {j.id_usuario: j for j in jugadores}
+
+    # Extraer IDs de equipo de los jugadores para cargar equipos en batch
+    ids_equipos_jugadores = [j.id_equipo for j in jugadores if j.id_equipo]
+
+    # Obtener IDs de equipos de entrenadores y delegados
+    entrenadores_ids = [id_usuario for _, rol, _, id_usuario in resultados if rol.nombre == 'entrenador']
+    delegados_ids = [id_usuario for _, rol, _, id_usuario in resultados if rol.nombre == 'delegado']
+
+    # Cargar equipos de entrenadores
+    equipos_entrenadores = (
+        db.query(Equipo)
+        .filter(Equipo.id_entrenador.in_(entrenadores_ids), Equipo.id_liga == liga_id)
+        .all()
+    )
+    equipos_por_entrenador_map = {e.id_entrenador: e for e in equipos_entrenadores}
+
+    # Cargar equipos de delegados
+    equipos_delegados = (
+        db.query(Equipo)
+        .filter(Equipo.id_delegado.in_(delegados_ids), Equipo.id_liga == liga_id)
+        .all()
+    )
+    equipos_por_delegado_map = {e.id_delegado: e for e in equipos_delegados}
+
+    # Cargar todos los equipos de los jugadores en una sola query
+    equipos_jugadores = (
+        db.query(Equipo)
+        .filter(Equipo.id_equipo.in_(ids_equipos_jugadores))
+        .all()
+    )
+    equipos_map = {e.id_equipo: e for e in equipos_jugadores}
 
     # Construir lista de respuestas con datos de usuario y rol
     usuarios_con_rol = []
@@ -644,36 +880,23 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
             "estadio": None,
         }
 
-        # Obtener equipo según el rol
+        # Obtener equipo según el rol (usando mapas en lugar de queries individuales)
         if rol.nombre == 'jugador':
-            # Buscar jugador en esta liga
-            jugador = db.query(Jugador).filter(
-                Jugador.id_usuario == id_usuario,
-                Jugador.id_liga == liga_id
-            ).first()
+            jugador = jugadores_map.get(id_usuario)
             if jugador:
                 usuario_data["id_equipo"] = jugador.id_equipo
-                # Obtener nombre del equipo y estadio
-                equipo = db.query(Equipo).filter(Equipo.id_equipo == jugador.id_equipo).first()
+                equipo = equipos_map.get(jugador.id_equipo)
                 if equipo:
                     usuario_data["nombre_equipo"] = equipo.nombre
                     usuario_data["estadio"] = equipo.estadio
         elif rol.nombre == 'entrenador':
-            # Buscar equipo donde es entrenador
-            equipo = db.query(Equipo).filter(
-                Equipo.id_entrenador == id_usuario,
-                Equipo.id_liga == liga_id
-            ).first()
+            equipo = equipos_por_entrenador_map.get(id_usuario)
             if equipo:
                 usuario_data["id_equipo"] = equipo.id_equipo
                 usuario_data["nombre_equipo"] = equipo.nombre
                 usuario_data["estadio"] = equipo.estadio
         elif rol.nombre == 'delegado':
-            # Buscar equipo donde es delegado
-            equipo = db.query(Equipo).filter(
-                Equipo.id_delegado == id_usuario,
-                Equipo.id_liga == liga_id
-            ).first()
+            equipo = equipos_por_delegado_map.get(id_usuario)
             if equipo:
                 usuario_data["id_equipo"] = equipo.id_equipo
                 usuario_data["nombre_equipo"] = equipo.nombre

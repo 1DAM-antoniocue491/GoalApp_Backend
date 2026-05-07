@@ -186,64 +186,70 @@ def crear_invitacion(
     Returns:
         Invitacion: Objeto Invitacion creado con su token
     """
-    # Generar token único
-    token = generar_token()
-
-    # Calcular fecha de expiración (7 días desde ahora)
-    fecha_expiracion = datetime.now(timezone.utc) + timedelta(days=7)
-
-    # Crear invitación
-    invitacion = Invitacion(
-        token=token,
-        email=email.lower().strip(),
-        nombre=nombre,
-        id_liga=id_liga,
-        id_equipo=id_equipo,
-        id_rol=id_rol,
-        dorsal=dorsal,
-        posicion=posicion,
-        tipo_jugador=tipo_jugador,
-        invitado_por=invitado_por,
-        fecha_expiracion=fecha_expiracion,
-        usada=False
-    )
-
-    db.add(invitacion)
-    db.commit()
-    db.refresh(invitacion)
-
-    # Enviar email de invitación
     try:
-        # Obtener nombres para el email
-        liga = db.query(Liga).filter(Liga.id_liga == id_liga).first()
-        rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
-        equipo = None
-        if id_equipo:
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
+        # Generar token único
+        token = generar_token()
 
-        invitador = None
-        if invitado_por:
-            invitador = db.query(Usuario).filter(Usuario.id_usuario == invitado_por).first()
+        # Calcular fecha de expiración (7 días desde ahora)
+        fecha_expiracion = datetime.now(timezone.utc) + timedelta(days=7)
 
-        enlace_aceptar = f"{settings.FRONTEND_URL}/register?invitation_token={token}"
-
-        enviar_email_invitacion(
-            email_destino=email,
-            nombre_invitado=nombre or email.split('@')[0],  # Usar nombre proporcionado o parte local del email
-            liga_nombre=liga.nombre if liga else "Liga",
-            equipo_nombre=equipo.nombre if equipo else None,
-            rol=rol.nombre if rol else "player",
-            dorsal=dorsal or "-",
-            posicion=posicion or "-",
-            tipo_jugador=tipo_jugador or "titular",
-            invitador_nombre=invitador.nombre if invitador else "Administrador",
-            enlace_aceptar=enlace_aceptar
+        # Crear invitación
+        invitacion = Invitacion(
+            token=token,
+            email=email.lower().strip(),
+            nombre=nombre,
+            id_liga=id_liga,
+            id_equipo=id_equipo,
+            id_rol=id_rol,
+            dorsal=dorsal,
+            posicion=posicion,
+            tipo_jugador=tipo_jugador,
+            invitado_por=invitado_por,
+            fecha_expiracion=fecha_expiracion,
+            usada=False
         )
-    except Exception as e:
-        # Log error pero no fallar la creación de invitación
-        print(f"[ERROR] No se pudo enviar email de invitación: {e}")
 
-    return invitacion
+        db.add(invitacion)
+        db.commit()
+        db.refresh(invitacion)
+
+        # Enviar email de invitación (fuera de la transacción principal)
+        try:
+            # Obtener nombres para el email
+            liga = db.query(Liga).filter(Liga.id_liga == id_liga).first()
+            rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
+            equipo = None
+            if id_equipo:
+                equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
+
+            invitador = None
+            if invitado_por:
+                invitador = db.query(Usuario).filter(Usuario.id_usuario == invitado_por).first()
+
+            enlace_aceptar = f"{settings.FRONTEND_URL}/register?invitation_token={token}"
+
+            enviar_email_invitacion(
+                email_destino=email,
+                nombre_invitado=nombre or email.split('@')[0],  # Usar nombre proporcionado o parte local del email
+                liga_nombre=liga.nombre if liga else "Liga",
+                equipo_nombre=equipo.nombre if equipo else None,
+                rol=rol.nombre if rol else "player",
+                dorsal=dorsal or "-",
+                posicion=posicion or "-",
+                tipo_jugador=tipo_jugador or "titular",
+                invitador_nombre=invitador.nombre if invitador else "Administrador",
+                enlace_aceptar=enlace_aceptar
+            )
+        except Exception as e:
+            # Log error pero no fallar la creación de invitación
+            print(f"[ERROR] No se pudo enviar email de invitación: {e}")
+
+        return invitacion
+    except Exception as e:
+        # Rollback en caso de error crítico
+        db.rollback()
+        print(f"[ERROR] Error crítico al crear invitación: {e}")
+        raise
 
 
 def generar_codigo_invitacion(
