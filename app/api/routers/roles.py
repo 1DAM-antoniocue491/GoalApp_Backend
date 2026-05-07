@@ -102,24 +102,25 @@ def eliminar_rol_router(rol_id: int, db: Session = Depends(get_db)):
     return {"mensaje": "Rol eliminado"}
 
 @router.post("/asignar/{usuario_id}/{rol_id}", dependencies=[Depends(require_role("admin"))])
-def asignar_rol(usuario_id: int, rol_id: int, db: Session = Depends(get_db)):
+def asignar_rol(usuario_id: int, rol_id: int, id_liga: int = None, db: Session = Depends(get_db)):
     """
     Asignar un rol a un usuario.
-    
+
     Vincula un rol existente a un usuario específico, otorgándole los permisos
     asociados a ese rol.
-    
+
     Parámetros:
         - usuario_id (int): ID del usuario (path parameter)
         - rol_id (int): ID del rol a asignar (path parameter)
+        - id_liga (int, optional): ID de la liga donde aplica el rol (query parameter)
         - db (Session): Sesión de base de datos
-    
+
     Returns:
         dict: Mensaje de confirmación
-    
+        
     Requiere autenticación: Sí
     Roles permitidos: Admin
     """
     # Asignar el rol al usuario mediante el servicio
-    asignar_rol_a_usuario(db, usuario_id, rol_id)
+    asignar_rol_a_usuario(db, usuario_id, rol_id, id_liga)
     return {"mensaje": "Rol asignado correctamente"}

@@ -23,6 +23,8 @@ from app.api.services.liga_service import (
     actualizar_estado_usuario,
     eliminar_usuario_liga
 )
+
+from app.api.services.usuario_service import relevo_admin
 from app.schemas.gestion_usuarios import UsuarioRolUpdate, UsuarioEstadoUpdate, UsuarioLigaResponse
 from app.models.usuario import Usuario
 from app.models.rol import Rol
@@ -454,3 +456,47 @@ def crear_usuario_rol_router(
         nombre_rol=nueva_asignacion.rol.nombre,
         activo=bool(nueva_asignacion.activo)
     )
+
+# ============================================================
+# RELEVO DE ADMINISTRADOR
+# ============================================================
+
+@router.post("/{liga_id}/relevo-admin", dependencies=[Depends(require_role("admin"))])
+def relevo_admin_endpoint(
+    liga_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Realiza el relevo de administrador de una liga.
+    El admin actual pasa a ser viewer y el nuevo usuario se convierte en admin.
+
+    Parámetros:
+        - liga_id (int): ID de la liga (path parameter)
+        - payload (dict): {"nuevo_admin_id": int} - ID del usuario que será el nuevo admin
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado (admin actual)
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Requiere autenticación: Sí
+    Roles permitidos: Admin
+
+    Raises:
+        HTTPException 400: Si algún usuario no existe, no tiene el rol esperado, o la liga no existe
+        HTTPException 404: Si la liga no existe
+    """
+    nuevo_admin_id = payload.get("nuevo_admin_id")
+    if not nuevo_admin_id:
+        raise HTTPException(400, detail="nuevo_admin_id es requerido")
+
+    try:
+        relevo_admin(db, liga_id, current_user.id_usuario, nuevo_admin_id)
+        return {"message": "Relevo de administrador completado exitosamente"}
+    except ValueError as e:
+        error_msg = str(e)
+        if "no encontrada" in error_msg or "no encontrado" in error_msg:
+            raise HTTPException(404, detail=error_msg)
+        raise HTTPException(400, detail=error_msg)

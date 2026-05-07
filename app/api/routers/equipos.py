@@ -25,7 +25,9 @@ from app.api.services.equipo_service import (
     obtener_miembros_equipo,
     asignar_delegado,
     actualizar_estado_miembro,
-    eliminar_miembro_equipo
+    eliminar_miembro_equipo,
+    asignar_capitan,
+    obtener_capitan
 )
 
 # Configuración del router
@@ -515,3 +517,96 @@ def eliminar_miembro_equipo_router(
         raise HTTPException(403, str(e))
     except ValueError as e:
         raise HTTPException(404, str(e))
+    
+
+@router.get("/{equipo_id}/capitan")
+def obtener_capitan_endpoint(
+    equipo_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene el capitán actual de un equipo.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - db (Session): Sesión de base de datos
+
+    Returns:
+        Jugador: Información del jugador capitán
+
+    Requiere autenticación: No
+    Roles permitidos: Público
+
+    Raises:
+        HTTPException 404: Si el equipo no tiene capitán asignado
+    """
+    capitan = obtener_capitan(db, equipo_id)
+
+    if not capitan:
+        raise HTTPException(status_code=404, detail="Equipo sin capitán")
+
+    # Cargar datos del usuario relacionado
+    from sqlalchemy.orm import joinedload
+    capitan_con_usuario = db.query(Jugador).options(
+        joinedload(Jugador.usuario)
+    ).filter(Jugador.id_jugador == capitan.id_jugador).first()
+
+    return {
+        "id_jugador": capitan_con_usuario.id_jugador,
+        "id_usuario": capitan_con_usuario.id_usuario,
+        "id_equipo": capitan_con_usuario.id_equipo,
+        "posicion": capitan_con_usuario.posicion,
+        "dorsal": capitan_con_usuario.dorsal,
+        "es_capitan": capitan_con_usuario.es_capitan,
+        "nombre": capitan_con_usuario.usuario.nombre,
+        "email": capitan_con_usuario.usuario.email,
+    }
+
+
+@router.post("/{equipo_id}/capitan", dependencies=[Depends(require_role("coach"))])
+def asignar_capitan_endpoint(
+    equipo_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Asigna un capitán a un equipo. Solo puede haber 1 capitán por equipo.
+
+    Parámetros:
+        - equipo_id (int): ID del equipo (path parameter)
+        - payload (dict): {"jugador_id": int} - ID del jugador a asignar como capitán
+        - db (Session): Sesión de base de datos
+        - current_user: Usuario autenticado
+
+    Returns:
+        dict: Mensaje de confirmación con información del capitán asignado
+
+    Requiere autenticación: Sí
+    Roles permitidos: Coach (solo el entrenador del equipo)
+
+    Raises:
+        HTTPException 400: Si el jugador no pertenece al equipo o ya hay capitán
+        HTTPException 403: Si el usuario no es el entrenador del equipo
+    """
+    jugador_id = payload.get("jugador_id")
+    if not jugador_id:
+        raise HTTPException(status_code=400, detail="jugador_id es requerido")
+
+    try:
+        capitan = asignar_capitan(db, equipo_id, jugador_id, current_user.id_usuario)
+        return {
+            "message": "Capitán asignado exitosamente",
+            "jugador": {
+                "id_jugador": capitan.id_jugador,
+                "id_usuario": capitan.id_usuario,
+                "id_equipo": capitan.id_equipo,
+                "posicion": capitan.posicion,
+                "dorsal": capitan.dorsal,
+                "es_capitan": capitan.es_capitan,
+            }
+        }
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

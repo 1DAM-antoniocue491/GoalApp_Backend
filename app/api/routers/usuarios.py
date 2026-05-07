@@ -20,7 +20,8 @@ from app.api.services.usuario_service import (
     dejar_de_seguir_liga,
     obtener_ligas_seguidas,
     obtener_ligas_con_rol,
-    obtener_usuarios_con_rol_en_liga
+    obtener_usuarios_con_rol_en_liga,
+    relevo_admin
 )
 
 # Configuración del router
@@ -333,3 +334,42 @@ def obtener_stats_usuarios(
         "pendientes": pendientes,
         "admin_activos": admin_activos
     }
+
+# ============================================================
+# RELEVO DE ADMINISTRADOR
+# ============================================================
+
+
+@router.post("/ligas/{liga_id}/relevo-admin", dependencies=[Depends(require_role("admin"))])
+def relevo_admin_endpoint(
+    liga_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """
+    Realiza el relevo de administrador de una liga.
+    El admin actual pasa a ser viewer y el nuevo usuario se convierte en admin.
+
+    Args:
+        liga_id: ID de la liga
+        payload: {"nuevo_admin_id": int}
+        current_user: Admin actual que realiza el relevo
+
+    Returns:
+        dict: Mensaje de confirmación
+
+    Raises:
+        HTTPException 400: Si faltan datos o hay error de validación
+        HTTPException 401: Si no está autenticado
+        HTTPException 403: Si no tiene rol de admin
+    """
+    nuevo_admin_id = payload.get("nuevo_admin_id")
+    if not nuevo_admin_id:
+        raise HTTPException(status_code=400, detail="nuevo_admin_id es requerido")
+
+    try:
+        relevo_admin(db, liga_id, current_user.id_usuario, nuevo_admin_id)
+        return {"message": "Relevo de administrador completado exitosamente"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

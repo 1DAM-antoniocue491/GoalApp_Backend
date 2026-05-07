@@ -175,6 +175,7 @@ class UsuarioConRolEnLigaResponse(BaseModel):
         activo (bool): Si el usuario está activo en la liga
         id_equipo (int, optional): ID del equipo al que pertenece (si aplica)
         nombre_equipo (str, optional): Nombre del equipo (si aplica)
+        estadio (str, optional): Nombre del estadio del equipo (si aplica)
     """
     id_usuario: int
     nombre: str
@@ -184,6 +185,7 @@ class UsuarioConRolEnLigaResponse(BaseModel):
     activo: bool
     id_equipo: int | None = None
     nombre_equipo: str | None = None
+    estadio: str | None = None
 
     class Config:
         from_attributes = True

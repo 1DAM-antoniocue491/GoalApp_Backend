@@ -641,6 +641,7 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
             "activo": bool(activo),
             "id_equipo": None,
             "nombre_equipo": None,
+            "estadio": None,
         }
 
         # Obtener equipo según el rol
@@ -652,10 +653,11 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
             ).first()
             if jugador:
                 usuario_data["id_equipo"] = jugador.id_equipo
-                # Obtener nombre del equipo
+                # Obtener nombre del equipo y estadio
                 equipo = db.query(Equipo).filter(Equipo.id_equipo == jugador.id_equipo).first()
                 if equipo:
                     usuario_data["nombre_equipo"] = equipo.nombre
+                    usuario_data["estadio"] = equipo.estadio
         elif rol.nombre == 'entrenador':
             # Buscar equipo donde es entrenador
             equipo = db.query(Equipo).filter(
@@ -665,6 +667,7 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
             if equipo:
                 usuario_data["id_equipo"] = equipo.id_equipo
                 usuario_data["nombre_equipo"] = equipo.nombre
+                usuario_data["estadio"] = equipo.estadio
         elif rol.nombre == 'delegado':
             # Buscar equipo donde es delegado
             equipo = db.query(Equipo).filter(
@@ -674,7 +677,90 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int):
             if equipo:
                 usuario_data["id_equipo"] = equipo.id_equipo
                 usuario_data["nombre_equipo"] = equipo.nombre
+                usuario_data["estadio"] = equipo.estadio
 
         usuarios_con_rol.append(usuario_data)
 
     return usuarios_con_rol
+
+
+# ============================================================
+# RELEVO DE ADMINISTRADOR
+# ============================================================
+
+
+def relevo_admin(db: Session, liga_id: int, admin_actual_id: int, nuevo_admin_id: int):
+    """
+    Realiza el relevo de administrador de una liga.
+    El admin actual pasa a ser "viewer" (observador) y el nuevo usuario se convierte en admin.
+
+    Args:
+        db: Sesión de base de datos
+        liga_id: ID de la liga
+        admin_actual_id: ID del usuario que es admin actual
+        nuevo_admin_id: ID del usuario que será el nuevo admin
+
+    Raises:
+        ValueError: Si algún usuario no existe, no tiene el rol esperado, o la liga no existe
+    """
+    from app.models.usuario import Usuario
+    from app.models.rol import Rol
+    from app.models.liga import Liga
+    from app.models.usuario_rol import UsuarioRol
+
+    # Verificar que la liga existe
+    liga = db.query(Liga).filter(Liga.id_liga == liga_id).first()
+    if not liga:
+        raise ValueError(f"Liga con ID {liga_id} no encontrada")
+
+    # Verificar que el admin actual tiene rol de admin
+    admin_actual_rol = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == admin_actual_id,
+        UsuarioRol.id_liga == liga_id
+    ).join(Rol).filter(Rol.nombre == "admin").first()
+
+    if not admin_actual_rol:
+        raise ValueError("El usuario actual no tiene rol de administrador en esta liga")
+
+    # Verificar que el nuevo admin existe
+    nuevo_admin = db.query(Usuario).filter(Usuario.id_usuario == nuevo_admin_id).first()
+    if not nuevo_admin:
+        raise ValueError(f"Usuario con ID {nuevo_admin_id} no encontrado")
+
+    # Obtener rol de viewer
+    rol_viewer = db.query(Rol).filter(Rol.nombre == "viewer").first()
+    if not rol_viewer:
+        raise ValueError("Rol 'viewer' no encontrado en la base de datos")
+
+    # Obtener rol de admin
+    rol_admin = db.query(Rol).filter(Rol.nombre == "admin").first()
+    if not rol_admin:
+        raise ValueError("Rol 'admin' no encontrado en la base de datos")
+
+    # Actualizar admin actual a viewer (en misma transacción)
+    admin_actual_rol.id_rol = rol_viewer.id_rol
+    admin_actual_rol.activo = 1  # Asegurar que sigue activo como viewer
+
+    # Verificar si nuevo admin ya tiene algún rol en la liga
+    nuevo_admin_rol = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == nuevo_admin_id,
+        UsuarioRol.id_liga == liga_id
+    ).first()
+
+    if nuevo_admin_rol:
+        # Actualizar rol existente a admin
+        nuevo_admin_rol.id_rol = rol_admin.id_rol
+        nuevo_admin_rol.activo = 1
+    else:
+        # Crear nuevo rol para el nuevo admin
+        nuevo_admin_rol = UsuarioRol(
+            id_usuario=nuevo_admin_id,
+            id_rol=rol_admin.id_rol,
+            id_liga=liga_id,
+            activo=1
+        )
+        db.add(nuevo_admin_rol)
+
+    db.commit()
+
+    return True

@@ -798,3 +798,73 @@ def eliminar_miembro_equipo(db: Session, equipo_id: int, id_usuario: int, id_ent
     db.commit()
 
     return {"mensaje": "Jugador eliminado del equipo correctamente"}
+
+
+def asignar_capitan(db: Session, equipo_id: int, jugador_id: int, id_entrenador: int = None):
+    """
+    Asigna un capitán a un equipo. Solo puede haber 1 capitán por equipo.
+
+    Args:
+        db: Sesión de base de datos
+        equipo_id: ID del equipo
+        jugador_id: ID del jugador a asignar como capitán
+        id_entrenador: ID del entrenador que realiza la asignación (para validación de permisos)
+
+    Raises:
+        ValueError: Si el equipo no existe, el jugador no pertenece al equipo, o ya hay capitán
+    """
+    from app.models.equipo import Equipo
+
+    # Verificar que el equipo existe
+    equipo = db.query(Equipo).filter(Equipo.id_equipo == equipo_id).first()
+    if not equipo:
+        raise ValueError(f"Equipo con ID {equipo_id} no encontrado")
+
+    # Verificar que el jugador existe y pertenece al equipo
+    jugador = db.query(Jugador).filter(
+        Jugador.id_jugador == jugador_id,
+        Jugador.id_equipo == equipo_id,
+        Jugador.activo == True
+    ).first()
+
+    if not jugador:
+        raise ValueError(f"Jugador con ID {jugador_id} no pertenece al equipo {equipo_id} o está inactivo")
+
+    # Validar permisos si se proporciona id_entrenador
+    if id_entrenador is not None:
+        # Verificar que el entrenador tiene permisos sobre este equipo
+        if equipo.id_entrenador != id_entrenador:
+            raise PermissionError("Solo el entrenador del equipo puede asignar capitán")
+
+    # Setear es_capitan=False a todos los jugadores del equipo
+    db.query(Jugador).filter(
+        Jugador.id_equipo == equipo_id
+    ).update({"es_capitan": False})
+
+    # Setear es_capitan=True al jugador seleccionado
+    jugador.es_capitan = True
+
+    db.commit()
+    db.refresh(jugador)
+
+    return jugador
+
+
+def obtener_capitan(db: Session, equipo_id: int):
+    """
+    Obtiene el capitán actual de un equipo.
+
+    Args:
+        db: Sesión de base de datos
+        equipo_id: ID del equipo
+
+    Returns:
+        Jugador o None si no hay capitán
+    """
+    capitan = db.query(Jugador).filter(
+        Jugador.id_equipo == equipo_id,
+        Jugador.es_capitan == True,
+        Jugador.activo == True
+    ).first()
+
+    return capitan

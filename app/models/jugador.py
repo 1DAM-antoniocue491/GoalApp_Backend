@@ -23,6 +23,7 @@ class Jugador(Base):
         posicion (str): Posición en el campo (ej: "Delantero", máx. 50 caracteres)
         dorsal (int): Número de dorsal del jugador
         activo (bool): Si el jugador está activo en el equipo (default: True)
+        es_capitan (bool): Si el jugador es capitán del equipo (default: False)
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización
         usuario (Usuario): Relación con el usuario
@@ -41,6 +42,7 @@ class Jugador(Base):
     posicion = Column(String(50), nullable=False)  # Ejemplo: "Portero", "Defensa", "Centrocampista", "Delantero"
     dorsal = Column(Integer, nullable=False)  # Número de camiseta
     activo = Column(Boolean, nullable=False, default=True)  # Si está activo en el equipo
+    es_capitan = Column(Boolean, nullable=False, default=False)  # Si el jugador es capitán del equipo
 
     # Auditoría: fechas de creación y actualización
     # default=func.now() ensures consistent timestamps across all database backends

@@ -565,17 +565,92 @@ def generar_codigo_invitacion_endpoint(
             detail="Rol a asignar no válido"
         )
 
+    # Variable para almacenar el equipo asignado automáticamente
+    equipo_asignado = None
+
+    # Validar permisos según el rol del usuario que genera el código
+    if rol_actual.nombre == "admin":
+        # Admin puede generar código para cualquier rol
+        # Admin SÍ debe especificar equipo para roles que lo requieran
+        pass
+    elif rol_actual.nombre == "coach":
+        # Coach solo puede generar código para delegate o player de SU equipo
+        if rol_a_asignar.nombre not in ["delegate", "player"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como entrenador, solo puedes generar códigos para delegados o jugadores"
+            )
+        # Obtener automáticamente el equipo del entrenador
+        equipo_asignado = db.query(Equipo).filter(
+            Equipo.id_entrenador == current_user.id_usuario,
+            Equipo.id_liga == liga_id
+        ).first()
+        if not equipo_asignado:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes un equipo asignado en esta liga"
+            )
+    elif rol_actual.nombre == "delegate":
+        # Delegado solo puede generar código para player (jugador) de SU equipo
+        if rol_a_asignar.nombre != "player":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como delegado, solo puedes generar códigos para jugadores"
+            )
+        # Obtener automáticamente el equipo del delegado
+        equipo_asignado = db.query(Equipo).filter(
+            Equipo.id_delegado == current_user.id_usuario,
+            Equipo.id_liga == liga_id
+        ).first()
+        if not equipo_asignado:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes un equipo asignado en esta liga"
+            )
+    elif rol_actual.nombre == "player":
+        # Jugador solo puede generar código para viewer
+        if rol_a_asignar.nombre != "viewer":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como jugador, solo puedes generar códigos para observadores"
+            )
+    elif rol_actual.nombre == "viewer":
+        # Viewer solo puede generar código para viewer
+        if rol_a_asignar.nombre != "viewer":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Como observador, solo puedes generar códigos para observadores"
+            )
+    else:
+        # Roles no reconocidos no pueden generar códigos
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para generar códigos de invitación"
+        )
+
+    # Asignar equipo según corresponda
+    # Admin debe especificarlo, coach/delegate se asigna automáticamente
+    id_equipo_final = None
+    if rol_actual.nombre == "admin":
+        id_equipo_final = datos.id_equipo
+    elif equipo_asignado:
+        id_equipo_final = equipo_asignado.id_equipo
+
+    # Validaciones por rol (equipo, dorsal, posicion)
     if rol_a_asignar.nombre in ["admin", "viewer"]:
         # No requieren equipo
         pass
     elif rol_a_asignar.nombre == "coach":
-        if not datos.id_equipo:
+
+        # Admin debe especificar equipo; coach/delegate se asigna automáticamente
+        if rol_actual.nombre == "admin" and not datos.id_equipo:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El entrenador debe tener un equipo asignado"
             )
     elif rol_a_asignar.nombre in ["delegate", "player"]:
-        if not datos.id_equipo:
+        # Admin debe especificar equipo; coach/delegate se asigna automáticamente
+        if rol_actual.nombre == "admin" and not datos.id_equipo:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Este rol requiere un equipo asignado"
@@ -808,6 +883,7 @@ def eliminar_codigo_invitacion(
     Roles permitidos: Admin de la liga
     """
     from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
 
     # Verificar que el usuario actual es admin de la liga
     usuario_rol_actual = db.query(UsuarioRol).filter(

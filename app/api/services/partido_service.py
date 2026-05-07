@@ -18,7 +18,7 @@ from app.models.jugador import Jugador
 from app.models.evento_partido import EventoPartido
 from app.models.estado_jugador_partido import EstadoJugadorPartido
 from app.schemas.partido import PartidoCreate, PartidoUpdate, CalendarCreateRequest, FinalizarPartidoRequest
-from app.api.services.notificacion_service import notificar_usuarios_liga
+from app.api.services.notificacion_service import notificar_usuarios_liga, notificar_equipo
 
 
 def crear_partido(db: Session, datos: PartidoCreate):
@@ -732,7 +732,7 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     - Usuario es admin o delegado asignado al partido
     - Partido está en estado 'programado'
     - Fecha del partido >= hoy
-    - Ambos equipos tienen exactamente 11 titulares
+    - Ambos equipos tienen exactamente 11 titulares en la convocatoria
     - Ambos equipos tienen al menos 1 portero entre los titulares
 
     Args:
@@ -745,7 +745,7 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
 
     Raises:
         ValueError: Si el partido no existe, no está en estado programado,
-                   o los equipos no tienen la alineación requerida
+                   o los equipos no tienen la convocatoria requerida
     """
     # Obtener partido con relaciones
     partido = db.query(Partido).filter(Partido.id_partido == partido_id).first()
@@ -761,23 +761,23 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     if partido.fecha > ahora:
         raise ValueError("La fecha/hora del partido aún no ha llegado")
 
-    # Validar alineación de ambos equipos
+    # Validar convocatoria de ambos equipos (usar convocatoria_partido, no alineacion_partido)
     for id_equipo in [partido.id_equipo_local, partido.id_equipo_visitante]:
-        # Obtener titulares (11 jugadores) - hacer join con Jugador para filtrar por equipo
+        # Obtener titulares convocados (11 jugadores) - hacer join con Jugador para filtrar por equipo
         from sqlalchemy.orm import joinedload
-        titulares = db.query(AlineacionPartido).join(
-            Jugador, AlineacionPartido.id_jugador == Jugador.id_jugador
+        convocados_titulares = db.query(ConvocatoriaPartido).join(
+            Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
         ).filter(
-            AlineacionPartido.id_partido == partido_id,
+            ConvocatoriaPartido.id_partido == partido_id,
             Jugador.id_equipo == id_equipo,
-            AlineacionPartido.titular == True
+            ConvocatoriaPartido.es_titular == True
         ).all()
 
-        if len(titulares) != 11:
-            raise ValueError(f"El equipo {id_equipo} debe tener exactamente 11 titulares, tiene {len(titulares)}")
+        if len(convocados_titulares) != 11:
+            raise ValueError(f"El equipo {id_equipo} debe tener exactamente 11 titulares en la convocatoria, tiene {len(convocados_titulares)}")
 
-        # Validar al menos 1 portero entre los titulares
-        ids_jugadores = [a.id_jugador for a in titulares]
+        # Validar al menos 1 portero entre los titulares convocados
+        ids_jugadores = [c.id_jugador for c in convocados_titulares]
         jugadores = db.query(Jugador).filter(
             Jugador.id_jugador.in_(ids_jugadores),
             Jugador.posicion.ilike("%portero%")
@@ -795,13 +795,23 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     db.commit()
     db.refresh(partido)
 
-    # Notificar a usuarios de la liga
-    notificar_usuarios_liga(
+    # Notificar solo a los equipos involucrados (jugadores, entrenador, delegado)
+    notificar_equipo(
         db=db,
-        id_liga=partido.id_liga,
+        id_equipo=partido.id_equipo_local,
         tipo="partido_iniciado",
         titulo="Partido Iniciado",
-        mensaje=f"{partido.equipo_local.nombre} vs {partido.equipo_visitante.nombre} — ¡El partido ha comenzado!",
+        mensaje=f"¡Comienza el partido contra {partido.equipo_visitante.nombre}!",
+        id_referencia=partido.id_partido,
+        tipo_referencia="partido"
+    )
+
+    notificar_equipo(
+        db=db,
+        id_equipo=partido.id_equipo_visitante,
+        tipo="partido_iniciado",
+        titulo="Partido Iniciado",
+        mensaje=f"¡Comienza el partido contra {partido.equipo_local.nombre}!",
         id_referencia=partido.id_partido,
         tipo_referencia="partido"
     )
@@ -840,15 +850,15 @@ def _inicializar_estados_jugadores(db: Session, partido: Partido, ids_equipos: l
         else:
             ids_convocados = [c.id_jugador for c in convocados]
 
-        # Obtener titulares de la alineación (join con Jugador para filtrar por equipo)
-        titulares = db.query(AlineacionPartido).join(
-            Jugador, AlineacionPartido.id_jugador == Jugador.id_jugador
+        # Obtener titulares de la convocatoria (join con Jugador para filtrar por equipo)
+        titulares_convocatoria = db.query(ConvocatoriaPartido).join(
+            Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
         ).filter(
-            AlineacionPartido.id_partido == partido.id_partido,
+            ConvocatoriaPartido.id_partido == partido.id_partido,
             Jugador.id_equipo == id_equipo,
-            AlineacionPartido.titular == True
+            ConvocatoriaPartido.es_titular == True
         ).all()
-        ids_titulares = [a.id_jugador for a in titulares]
+        ids_titulares = [c.id_jugador for c in titulares_convocatoria]
 
         # Crear registros de estado para cada jugador convocado
         for id_jugador in ids_convocados:
@@ -896,6 +906,15 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
     partido.goles_visitante = datos.goles_visitante
     partido.estado = "finalizado"
 
+    # Validar que el jugador MVP estuvo convocado al partido
+    convocatoria_mvp = db.query(ConvocatoriaPartido).filter(
+        ConvocatoriaPartido.id_partido == partido_id,
+        ConvocatoriaPartido.id_jugador == datos.id_mvp
+    ).first()
+
+    if not convocatoria_mvp:
+        raise ValueError("El jugador seleccionado como MVP no estuvo convocado en este partido")
+
     # Crear evento MVP
     mvp_evento = EventoPartido(
         id_partido=partido_id,
@@ -909,13 +928,23 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
     db.commit()
     db.refresh(partido)
 
-    # Notificar a usuarios de la liga con el resultado final
-    notificar_usuarios_liga(
+    # Notificar solo a los equipos involucrados con el resultado final
+    notificar_equipo(
         db=db,
-        id_liga=partido.id_liga,
+        id_equipo=partido.id_equipo_local,
         tipo="partido_finalizado",
         titulo="Partido Finalizado",
         mensaje=f"{partido.equipo_local.nombre} {partido.goles_local} - {partido.goles_visitante} {partido.equipo_visitante.nombre}",
+        id_referencia=partido.id_partido,
+        tipo_referencia="partido"
+    )
+
+    notificar_equipo(
+        db=db,
+        id_equipo=partido.id_equipo_visitante,
+        tipo="partido_finalizado",
+        titulo="Partido Finalizado",
+        mensaje=f"{partido.equipo_visitante.nombre} {partido.goles_visitante} - {partido.goles_local} {partido.equipo_local.nombre}",
         id_referencia=partido.id_partido,
         tipo_referencia="partido"
     )

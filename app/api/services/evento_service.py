@@ -105,16 +105,17 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
                 titulo = f"¡GOL DE {equipo.nombre.upper()}!"
                 mensaje = f"{jugador.usuario.nombre} marca gol en el minuto {datos.minuto}"
 
-                # Notificar a seguidores de la liga
-                from app.api.services.notificacion_service import notificar_seguidores_liga
-                notificar_seguidores_liga(
+                # Notificar solo a usuarios con rol en la liga (admins, delegados, entrenadores)
+                from app.api.services.notificacion_service import notificar_usuarios_liga
+                notificar_usuarios_liga(
                     db=db,
                     id_liga=partido.id_liga,
                     tipo="gol",
                     titulo=titulo,
                     mensaje=mensaje,
                     id_referencia=partido.id_partido,
-                    tipo_referencia="partido"
+                    tipo_referencia="partido",
+                    excluir_ids={usuario_id}  # Excluir quien registró el gol
                 )
 
     # === TRIGGER DE NOTIFICACIÓN DE SUSTITUCIÓN ===
@@ -134,21 +135,50 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
             ).first()
 
             if equipo:
-                titulo = f"Sustitución en {equipo.nombre}"
-                mensaje = f"Sale {jugador_sale.usuario.nombre}, entra {jugador_entra.usuario.nombre} (min {datos.minuto})"
+                # Notificaciones personalizadas solo a jugadores involucrados + delegado
+                from app.api.services.notificacion_service import crear_notificaciones_masivas
 
-                # Notificar a todos los miembros del equipo
-                from app.api.services.notificacion_service import notificar_equipo
-                notificar_equipo(
-                    db=db,
-                    id_equipo=equipo.id_equipo,
-                    tipo="sustitucion",
-                    titulo=titulo,
-                    mensaje=mensaje,
-                    id_referencia=partido.id_partido,
-                    tipo_referencia="partido",
-                    excluir_ids={usuario_id}  # Excluir al delegado que hizo la acción
-                )
+                notificaciones_data = []
+
+                # Notificar al jugador que entra
+                if jugador_entra.id_usuario and jugador_entra.id_usuario != usuario_id:
+                    notificaciones_data.append({
+                        "id_usuario": jugador_entra.id_usuario,
+                        "tipo": "sustitucion",
+                        "titulo": "Has entrado al campo",
+                        "mensaje": f"Entras al campo en el minuto {datos.minuto}",
+                        "leida": False,
+                        "id_referencia": partido.id_partido,
+                        "tipo_referencia": "partido"
+                    })
+
+                # Notificar al jugador que sale
+                if jugador_sale.id_usuario and jugador_sale.id_usuario != usuario_id:
+                    notificaciones_data.append({
+                        "id_usuario": jugador_sale.id_usuario,
+                        "tipo": "sustitucion",
+                        "titulo": "Has sido sustituido",
+                        "mensaje": f"Sales del campo en el minuto {datos.minuto}",
+                        "leida": False,
+                        "id_referencia": partido.id_partido,
+                        "tipo_referencia": "partido"
+                    })
+
+                # Notificar al delegado del equipo (si existe y no es quien registró)
+                if equipo.id_delegado and equipo.id_delegado != usuario_id:
+                    mensaje_delegado = f"Sale {jugador_sale.usuario.nombre}, entra {jugador_entra.usuario.nombre} (min {datos.minuto})"
+                    notificaciones_data.append({
+                        "id_usuario": equipo.id_delegado,
+                        "tipo": "sustitucion",
+                        "titulo": "Sustitución en tu equipo",
+                        "mensaje": mensaje_delegado,
+                        "leida": False,
+                        "id_referencia": partido.id_partido,
+                        "tipo_referencia": "partido"
+                    })
+
+                if notificaciones_data:
+                    crear_notificaciones_masivas(db, notificaciones_data)
 
     # Si es sustitución, actualizar estados después de crear el evento
     if datos.tipo_evento == "cambio" and datos.id_jugador_sale:
