@@ -135,8 +135,7 @@ def asignar_rol_directamente(
                     id_equipo=id_equipo,
                     dorsal=dorsal_int,
                     posicion=posicion,
-                    tipo_jugador=tipo_jugador or "titular"
-                )
+                    )
                 db.add(jugador)
                 db.commit()
         elif rol.nombre == "coach":
@@ -438,7 +437,6 @@ def aceptar_invitacion_por_codigo(
                 id_equipo=invitacion.id_equipo,
                 dorsal=dorsal_int,
                 posicion=invitacion.posicion,
-                tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
         elif rol and rol.nombre == "coach":
@@ -541,7 +539,6 @@ def aceptar_invitacion_por_codigo_usuario_existente(
                 id_equipo=invitacion.id_equipo,
                 dorsal=dorsal_int,
                 posicion=invitacion.posicion,
-                tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
         elif rol and rol.nombre == "coach":
@@ -688,7 +685,6 @@ def aceptar_invitacion(
                 id_equipo=invitacion.id_equipo,
                 dorsal=dorsal_int,
                 posicion=invitacion.posicion,
-                tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
         elif rol and rol.nombre == "coach":
@@ -800,7 +796,6 @@ def aceptar_invitacion_usuario_existente(
                 id_equipo=invitacion.id_equipo,
                 dorsal=dorsal_int,
                 posicion=invitacion.posicion,
-                tipo_jugador=invitacion.tipo_jugador or "titular"
             )
             db.add(jugador)
         elif rol and rol.nombre == "coach":
