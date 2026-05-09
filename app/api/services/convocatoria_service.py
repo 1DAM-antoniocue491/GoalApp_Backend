@@ -236,9 +236,6 @@ def obtener_convocatoria_equipo(db: Session, id_partido: int, id_equipo: int) ->
         suplentes=suplentes,
         updated_at=updated_at
     )
-        titulares=titulares,
-        suplentes=suplentes
-    )
 
 
 def eliminar_convocatoria(db: Session, id_partido: int) -> bool:
