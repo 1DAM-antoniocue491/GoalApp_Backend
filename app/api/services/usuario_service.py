@@ -828,7 +828,8 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int, solo_activos: bo
     # Cargar todos los jugadores de esta liga en una sola query (selectinload manual)
     jugadores = (
         db.query(Jugador)
-        .filter(Jugador.id_usuario.in_(ids_usuarios), Jugador.id_liga == liga_id)
+        .join(Equipo, Jugador.id_equipo == Equipo.id_equipo)
+        .filter(Jugador.id_usuario.in_(ids_usuarios), Equipo.id_liga == liga_id)
         .all()
     )
     # Mapa: id_usuario -> jugador
