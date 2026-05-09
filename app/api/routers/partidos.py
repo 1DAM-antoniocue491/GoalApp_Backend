@@ -313,8 +313,13 @@ def obtener_partido_router(partido_id: int, db: Session = Depends(get_db)):
     return partido
 
 
-@router.put("/{partido_id}", response_model=PartidoResponse, dependencies=[Depends(require_role("admin"))])
-def actualizar_partido_router(partido_id: int, datos: PartidoUpdate, db: Session = Depends(get_db)):
+@router.put("/{partido_id}", response_model=PartidoResponse)
+def actualizar_partido_router(
+    partido_id: int,
+    datos: PartidoUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
     """
     Actualizar información de un partido.
 
@@ -325,14 +330,18 @@ def actualizar_partido_router(partido_id: int, datos: PartidoUpdate, db: Session
         - partido_id (int): ID del partido a actualizar (path parameter)
         - datos (PartidoUpdate): Campos del partido a modificar
         - db (Session): Sesión de base de datos
+        - current_user (Usuario): Usuario autenticado
 
     Returns:
         PartidoResponse: Información actualizada del partido
 
     Requiere autenticación: Sí
-    Roles permitidos: Admin
+    Roles permitidos: Admin, Coach, Delegate
     """
-    return actualizar_partido(db, partido_id, datos)
+    try:
+        return actualizar_partido(db, partido_id, datos, current_user.id_usuario)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{partido_id}", dependencies=[Depends(require_role("admin"))])

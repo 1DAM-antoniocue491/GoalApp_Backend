@@ -35,8 +35,18 @@ def crear_partido(db: Session, datos: PartidoCreate):
         Partido: Objeto Partido creado con su ID asignado
 
     Raises:
-        ValueError: Si la fecha no es futura, equipos son iguales o ya existe partido duplicado
+        ValueError: Si la fecha no es futura, equipos son iguales, ya existe partido duplicado
+                   o la liga ya tiene un calendario generado
     """
+    # Validar que no haya un calendario generado (partidos en estado 'programado')
+    partidos_programados = db.query(Partido).filter(
+        Partido.id_liga == datos.id_liga,
+        Partido.estado == "programado"
+    ).count()
+
+    if partidos_programados > 0:
+        raise ValueError("La liga ya tiene un calendario generado. No se pueden crear partidos manuales.")
+
     # Validar fecha futura
     if datos.fecha < datetime.now(timezone.utc).replace(tzinfo=None):
         raise ValueError("La fecha del partido debe ser futura")
@@ -159,7 +169,7 @@ def obtener_partido_por_id(db: Session, partido_id: int):
     return db.query(Partido).filter(Partido.id_partido == partido_id).first()
 
 
-def actualizar_partido(db: Session, partido_id: int, datos: PartidoUpdate):
+def actualizar_partido(db: Session, partido_id: int, datos: PartidoUpdate, usuario_id: int):
     """
     Actualiza los datos de un partido existente.
     
@@ -167,19 +177,51 @@ def actualizar_partido(db: Session, partido_id: int, datos: PartidoUpdate):
         db (Session): Sesión de base de datos SQLAlchemy
         partido_id (int): ID del partido a actualizar
         datos (PartidoUpdate): Datos a actualizar (solo campos proporcionados)
+        usuario_id (int): ID del usuario que realiza la actualización
     
     Returns:
         Partido: Objeto Partido actualizado
     
     Raises:
-        ValueError: Si el partido no existe
+        ValueError: Si el partido no existe o el usuario no tiene permisos
     """
     partido = obtener_partido_por_id(db, partido_id)
     if not partido:
         raise ValueError("Partido no encontrado")
 
+    # Verificar permisos: admin de la liga, o entrenador/delegado de algun equipo
+    from app.models.usuario_rol import UsuarioRol, Rol
+    
+    equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
+    equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
+    
+    usuario_roles = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == usuario_id
+    ).all()
+    roles_usuario = set()
+    ligas_usuario = {}
+    for ur in usuario_roles:
+        rol_nombre = db.query(Rol).filter(Rol.id_rol == ur.id_rol).first()
+        if rol_nombre:
+            roles_usuario.add(rol_nombre.nombre)
+            ligas_usuario[rol_nombre.nombre] = ur.id_liga
+    
+    es_admin_global = "admin" in roles_usuario
+    es_admin_liga = es_admin_global and ligas_usuario.get("admin") == partido.id_liga
+    es_entrenador_local = "coach" in roles_usuario and equipo_local and ligas_usuario.get("coach") == partido.id_liga
+    es_entrenador_visitante = "coach" in roles_usuario and equipo_visitante and ligas_usuario.get("coach") == partido.id_liga
+    es_delegado_local = "delegate" in roles_usuario and equipo_local and ligas_usuario.get("delegate") == partido.id_liga
+    es_delegado_visitante = "delegate" in roles_usuario and equipo_visitante and ligas_usuario.get("delegate") == partido.id_liga
+    
+    if not (es_admin_liga or es_entrenador_local or es_entrenador_visitante or
+            es_delegado_local or es_delegado_visitante):
+        raise ValueError("No tienes permisos para editar este partido")
+
     # Actualizar solo los campos proporcionados
     for campo, valor in datos.dict(exclude_unset=True).items():
+        # Si es datetime naive, asignarle zona horaria UTC
+        if isinstance(valor, datetime) and valor.tzinfo is None:
+            valor = valor.replace(tzinfo=timezone.utc)
         setattr(partido, campo, valor)
 
     db.commit()
@@ -871,7 +913,7 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     if partido.estado != "programado":
         raise ValueError(f"El partido debe estar en estado 'programado', estado actual: {partido.estado}")
 
-    # Validar permisos: solo entrenador o delegado de alguno de los equipos puede iniciar
+    # Validar permisos: admin de la liga, o entrenador/delegado de alguno de los equipos puede iniciar
     # Cargar equipos para obtener entrenador y delegado
     equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
     equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
@@ -879,14 +921,24 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     if not equipo_local or not equipo_visitante:
         raise ValueError("Uno o ambos equipos no existen")
 
+    # Verificar si el usuario es admin de la liga
+    from app.models.usuario_rol import UsuarioRol, Rol
+    es_admin = db.query(UsuarioRol).join(
+        Rol, UsuarioRol.id_rol == Rol.id_rol
+    ).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == partido.id_liga,
+        Rol.nombre == "admin"
+    ).first() is not None
+
     es_entrenador_o_delegado = (
         usuario_id == equipo_local.id_entrenador or
         usuario_id == equipo_local.id_delegado or
         usuario_id == equipo_visitante.id_entrenador or
         usuario_id == equipo_visitante.id_delegado
     )
-    if not es_entrenador_o_delegado:
-        raise ValueError("Solo el entrenador o delegado de los equipos puede iniciar el partido")
+    if not es_admin and not es_entrenador_o_delegado:
+        raise ValueError("Solo el administrador, entrenador o delegado puede iniciar el partido")
 
     # Validar que la fecha/hora del partido haya llegado
     # Usar timezone.utc para comparar correctamente con partido.fecha (DateTime con timezone)
@@ -921,6 +973,9 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
 
     # Cambiar estado a 'en_juego'
     partido.estado = "en_juego"
+
+    # Forzar la carga de las relaciones de equipos para evitar InvalidRequestError en notificaciones
+    db.refresh(partido, attribute_names=['equipo_local', 'equipo_visitante'])
 
     # Inicializar estados de los jugadores
     _inicializar_estados_jugadores(db, partido, [partido.id_equipo_local, partido.id_equipo_visitante])
