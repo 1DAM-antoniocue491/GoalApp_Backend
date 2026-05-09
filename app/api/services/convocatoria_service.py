@@ -82,11 +82,12 @@ def crear_convocatoria(db: Session, datos: ConvocatoriaCreate) -> List[Convocato
 
     # Eliminar TODAS las convocatorias existentes de este equipo para este partido
     # Esto permite reemplazar completamente la convocatoria al editar
-    db.query(ConvocatoriaPartido).join(
-        Jugador, ConvocatoriaPartido.id_jugador == Jugador.id_jugador
-    ).filter(
+    jugadores_equipo = db.query(Jugador.id_jugador).filter(Jugador.id_equipo == id_equipo).all()
+    ids_jugadores = [j.id_jugador for j in jugadores_equipo]
+
+    db.query(ConvocatoriaPartido).filter(
         ConvocatoriaPartido.id_partido == datos.id_partido,
-        Jugador.id_equipo == id_equipo
+        ConvocatoriaPartido.id_jugador.in_(ids_jugadores)
     ).delete()
 
     # Crear nueva convocatoria
