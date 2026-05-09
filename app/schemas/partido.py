@@ -15,11 +15,13 @@ class EstadoPartido(str, Enum):
         en_juego: El partido se está jugando actualmente
         finalizado: El partido ha concluido
         cancelado: El partido fue cancelado
+        suspendido: El partido fue suspendido temporalmente
     """
     programado = "programado"
     en_juego = "en_juego"
     finalizado = "finalizado"
     cancelado = "cancelado"
+    suspendido = "suspendido"
 
     @classmethod
     def _missing_(cls, value):
