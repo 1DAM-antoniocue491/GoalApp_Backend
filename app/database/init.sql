@@ -68,8 +68,6 @@ CREATE TABLE liga_configuracion (
     max_equipos INT NOT NULL DEFAULT 20,
     min_convocados INT NOT NULL DEFAULT 14,
     max_convocados INT NOT NULL DEFAULT 22,
-    min_plantilla INT NOT NULL DEFAULT 11,
-    max_plantilla INT NOT NULL DEFAULT 25,
     min_jugadores_equipo INT NOT NULL DEFAULT 7,
     min_partidos_entre_equipos INT NOT NULL DEFAULT 2,
     minutos_partido INT NOT NULL DEFAULT 90,

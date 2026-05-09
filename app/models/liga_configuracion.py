@@ -45,8 +45,6 @@ class LigaConfiguracion(Base):
     max_equipos = Column(Integer, nullable=False, default=20)
     min_convocados = Column(Integer, nullable=False, default=14)
     max_convocados = Column(Integer, nullable=False, default=22)
-    min_plantilla = Column(Integer, nullable=False, default=11)
-    max_plantilla = Column(Integer, nullable=False, default=25)
     min_jugadores_equipo = Column(Integer, nullable=False, default=7)
     min_partidos_entre_equipos = Column(Integer, nullable=False, default=2)
     minutos_partido = Column(Integer, nullable=False, default=90)

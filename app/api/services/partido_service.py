@@ -922,7 +922,8 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
         raise ValueError("Uno o ambos equipos no existen")
 
     # Verificar si el usuario es admin de la liga
-    from app.models.usuario_rol import UsuarioRol, Rol
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
     es_admin = db.query(UsuarioRol).join(
         Rol, UsuarioRol.id_rol == Rol.id_rol
     ).filter(

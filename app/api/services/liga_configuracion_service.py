@@ -23,8 +23,6 @@ def crear_configuracion(db: Session, liga_id: int, datos: LigaConfiguracionCreat
         max_equipos=datos.max_equipos,
         min_convocados=datos.min_convocados,
         max_convocados=datos.max_convocados,
-        min_plantilla=datos.min_plantilla,
-        max_plantilla=datos.max_plantilla,
         min_jugadores_equipo=datos.min_jugadores_equipo,
         min_partidos_entre_equipos=datos.min_partidos_entre_equipos,
         minutos_partido=datos.minutos_partido,
@@ -44,7 +42,6 @@ def actualizar_configuracion(db: Session, liga_id: int, datos: LigaConfiguracion
     update_fields = [
         'hora_partidos', 'min_equipos', 'max_equipos',
         'min_convocados', 'max_convocados',
-        'min_plantilla', 'max_plantilla',
         'min_jugadores_equipo', 'min_partidos_entre_equipos',
         'minutos_partido', 'max_partidos',
     ]

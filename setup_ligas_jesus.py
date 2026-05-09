@@ -119,12 +119,12 @@ def crear_liga(conn, nombre, temporada):
         cur.execute("""
             INSERT INTO liga_configuracion (
                 id_liga, hora_partidos, min_equipos, max_equipos,
-                min_convocados, max_convocados, min_plantilla, max_plantilla,
+                min_convocados, max_convocados,
                 min_jugadores_equipo, min_partidos_entre_equipos,
                 minutos_partido, max_partidos, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-        """, (liga_id, '17:00:00', 2, 20, 14, 22, 11, 25, 7, 2, 90, 30))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        """, (liga_id, '17:00:00', 2, 20, 14, 22, 7, 2, 90, 30))
 
         conn.commit()
         print(f"  Liga creada: {nombre} (ID: {liga_id})")
