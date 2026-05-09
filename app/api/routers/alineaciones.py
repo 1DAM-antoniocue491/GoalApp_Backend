@@ -112,7 +112,7 @@ def crear_alineaciones_bulk_router(
         raise HTTPException(400, str(e))
 
 
-@router.get("/{id_alineacion}", response_model=AlineacionResponse, summary="Obtener alineación por ID", dependencies=[Depends(require_role("jugador"))])
+@router.get("/{id_alineacion}", response_model=AlineacionResponse, summary="Obtener alineación por ID")
 def obtener_alineacion_router(
     id_alineacion: int,
     db: Session = Depends(get_db),
@@ -135,13 +135,17 @@ def obtener_alineacion_router(
     Raises:
         HTTPException 404: Si la alineación no existe
     """
+    roles_permitidos = ["admin", "coach", "delegate", "player"]
+    if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
+        raise HTTPException(403, "No tienes permiso para ver alineaciones")
+
     alineacion = obtener_alineacion_por_id(db, id_alineacion)
     if not alineacion:
         raise HTTPException(404, f"Alineación con ID {id_alineacion} no encontrada")
     return alineacion
 
 
-@router.get("/partido/{id_partido}", response_model=List[AlineacionResponse], summary="Obtener alineaciones de un partido", dependencies=[Depends(require_role("jugador"))])
+@router.get("/partido/{id_partido}", response_model=List[AlineacionResponse], summary="Obtener alineaciones de un partido")
 def obtener_alineaciones_partido_router(
     id_partido: int,
     db: Session = Depends(get_db),
@@ -164,6 +168,10 @@ def obtener_alineaciones_partido_router(
     Raises:
         HTTPException 404: Si el partido no existe
     """
+    roles_permitidos = ["admin", "coach", "delegate", "player"]
+    if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
+        raise HTTPException(403, "No tienes permiso para ver alineaciones")
+
     try:
         return obtener_alineaciones_partido(db, id_partido)
     except ValueError as e:
@@ -173,8 +181,7 @@ def obtener_alineaciones_partido_router(
 @router.get(
     "/partido/{id_partido}/equipo/{id_equipo}",
     response_model=AlineacionEquipoResponse,
-    summary="Obtener alineación de un equipo en un partido",
-    dependencies=[Depends(require_role("jugador"))]
+    summary="Obtener alineación de un equipo en un partido"
 )
 def obtener_alineacion_equipo_router(
     id_partido: int,
@@ -203,6 +210,10 @@ def obtener_alineacion_equipo_router(
         HTTPException 404: Si el partido o equipo no existen
         HTTPException 400: Si el equipo no participa en el partido
     """
+    roles_permitidos = ["admin", "coach", "delegate", "player"]
+    if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
+        raise HTTPException(403, "No tienes permiso para ver alineaciones")
+
     try:
         return obtener_alineacion_equipo(db, id_partido, id_equipo)
     except ValueError as e:

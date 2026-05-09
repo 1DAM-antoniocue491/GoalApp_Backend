@@ -63,7 +63,7 @@ def crear_convocatoria_router(
         raise HTTPException(400, str(e))
 
 
-@router.get("/partido/{id_partido}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria del partido", dependencies=[Depends(require_role("jugador"))])
+@router.get("/partido/{id_partido}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria del partido")
 def obtener_convocatoria_router(
     id_partido: int,
     db: Session = Depends(get_db),
@@ -85,6 +85,10 @@ def obtener_convocatoria_router(
     Requiere autenticación: Sí
     Roles permitidos: Jugador, Coach, Delegate, Admin
     """
+    roles_permitidos = ["admin", "coach", "delegate", "player"]
+    if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
+        raise HTTPException(403, "No tienes permiso para ver convocatorias")
+
     try:
         convocatoria = obtener_convocatoria_partido(db, id_partido)
         if not convocatoria:
@@ -94,7 +98,7 @@ def obtener_convocatoria_router(
         raise HTTPException(404, str(e))
 
 
-@router.get("/partido/{id_partido}/equipo/{id_equipo}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria de un equipo", dependencies=[Depends(require_role("jugador"))])
+@router.get("/partido/{id_partido}/equipo/{id_equipo}", response_model=ConvocatoriaPartidoResponse, summary="Obtener convocatoria de un equipo")
 def obtener_convocatoria_equipo_router(
     id_partido: int,
     id_equipo: int,
@@ -118,6 +122,10 @@ def obtener_convocatoria_equipo_router(
     Requiere autenticación: Sí
     Roles permitidos: Jugador, Coach, Delegate, Admin
     """
+    roles_permitidos = ["admin", "coach", "delegate", "player"]
+    if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
+        raise HTTPException(403, "No tienes permiso para ver convocatorias")
+
     try:
         convocatoria = obtener_convocatoria_equipo(db, id_partido, id_equipo)
         if not convocatoria:

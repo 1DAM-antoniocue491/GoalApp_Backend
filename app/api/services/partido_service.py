@@ -509,8 +509,8 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
             id_liga=liga_id,
             numero=i + 1,
             nombre=f"Jornada {i + 1}",
-            fecha_inicio=fecha_jornada.replace(hour=hora, minute=minuto),
-            fecha_fin=fecha_jornada.replace(hour=hora+2, minute=minuto)  # 2 horas de ventana
+            fecha_inicio=fecha_jornada.replace(hour=hora, minute=minuto, tzinfo=timezone.utc),
+            fecha_fin=fecha_jornada.replace(hour=hora+2, minute=minuto, tzinfo=timezone.utc)  # 2 horas de ventana
         )
         db.add(jornada)
         db.flush()  # Obtener el ID generado
@@ -562,7 +562,7 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                     fecha_jornada_actual += timedelta(days=1)
 
             # Crear partido con la fecha calculada
-            fecha_partido = fecha_jornada_actual.replace(hour=hora, minute=minuto)
+            fecha_partido = fecha_jornada_actual.replace(hour=hora, minute=minuto, tzinfo=timezone.utc)
             local_idx = i
             visitante_idx = num_equipos - 1 - i
 
@@ -656,7 +656,7 @@ def crear_calendario(db: Session, liga_id: int, config: CalendarCreateRequest):
                         fecha_jornada_actual += timedelta(days=1)
 
                 # Invertir localía para la vuelta
-                fecha_partido = fecha_jornada_actual.replace(hour=hora, minute=minuto)
+                fecha_partido = fecha_jornada_actual.replace(hour=hora, minute=minuto, tzinfo=timezone.utc)
                 local_idx = i
                 visitante_idx = num_equipos - 1 - i
 
