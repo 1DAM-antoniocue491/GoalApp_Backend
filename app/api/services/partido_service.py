@@ -972,17 +972,17 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
         if len(jugadores) < 1:
             raise ValueError(f"El equipo {id_equipo} debe tener al menos 1 portero entre los titulares")
 
+    # Guardar nombres de equipos ANTES del commit para evitar lazy='raise' tras el refresh
+    nombre_local = equipo_local.nombre
+    nombre_visitante = equipo_visitante.nombre
+
     # Cambiar estado a 'en_juego'
     partido.estado = "en_juego"
-
-    # Forzar la carga de las relaciones de equipos para evitar InvalidRequestError en notificaciones
-    db.refresh(partido, attribute_names=['equipo_local', 'equipo_visitante'])
 
     # Inicializar estados de los jugadores
     _inicializar_estados_jugadores(db, partido, [partido.id_equipo_local, partido.id_equipo_visitante])
 
     db.commit()
-    db.refresh(partido)
 
     # Notificar solo a los equipos involucrados (jugadores, entrenador, delegado)
     notificar_equipo(
@@ -990,7 +990,7 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
         id_equipo=partido.id_equipo_local,
         tipo="partido_iniciado",
         titulo="Partido Iniciado",
-        mensaje=f"¡Comienza el partido contra {partido.equipo_visitante.nombre}!",
+        mensaje=f"¡Comienza el partido contra {nombre_visitante}!",
         id_referencia=partido.id_partido,
         tipo_referencia="partido"
     )
@@ -1000,7 +1000,7 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
         id_equipo=partido.id_equipo_visitante,
         tipo="partido_iniciado",
         titulo="Partido Iniciado",
-        mensaje=f"¡Comienza el partido contra {partido.equipo_local.nombre}!",
+        mensaje=f"¡Comienza el partido contra {nombre_local}!",
         id_referencia=partido.id_partido,
         tipo_referencia="partido"
     )
