@@ -601,7 +601,10 @@ def actualizar_estado_usuario(db: Session, liga_id: int, usuario_id: int, datos:
     db.commit()
 
     # Recargar y retornar
-    asignacion_actualizada = db.query(UsuarioRol).join(Usuario).join(Rol).filter(
+    asignacion_actualizada = db.query(UsuarioRol).options(
+        joinedload(UsuarioRol.usuario),
+        joinedload(UsuarioRol.rol)
+    ).filter(
         UsuarioRol.id_usuario_rol == asignacion.id_usuario_rol
     ).first()
 

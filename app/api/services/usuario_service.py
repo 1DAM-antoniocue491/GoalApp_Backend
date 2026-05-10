@@ -407,7 +407,7 @@ def cambiar_estado_usuario_en_liga(db: Session, usuario_id: int, liga_id: int, a
         raise ValueError("El usuario no tiene un rol asignado en esta liga")
 
     # Actualizar el estado
-    asignacion.activo = activo
+    asignacion.activo = 1 if activo else 0
     db.commit()
     db.refresh(asignacion)
 
