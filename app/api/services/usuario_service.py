@@ -811,7 +811,7 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int, solo_activos: bo
                      - nombre: Nombre del usuario
                      - email: Email del usuario
                      - id_rol: ID del rol
-                     - rol: Nombre del rol (admin, entrenador, delegado, jugador, etc.)
+                     - rol: Nombre del rol (admin, coach, delegate, player, viewer)
                      - activo: bool
                      - id_equipo: ID del equipo (si aplica)
                      - nombre_equipo: Nombre del equipo (si aplica)
@@ -857,8 +857,8 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int, solo_activos: bo
     ids_equipos_jugadores = [j.id_equipo for j in jugadores if j.id_equipo]
 
     # Obtener IDs de equipos de entrenadores y delegados
-    entrenadores_ids = [id_usuario for _, rol, _, id_usuario in resultados if rol.nombre == 'entrenador']
-    delegados_ids = [id_usuario for _, rol, _, id_usuario in resultados if rol.nombre == 'delegado']
+    entrenadores_ids = [id_usuario for _, rol, _, id_usuario in resultados if rol.nombre == 'coach']
+    delegados_ids = [id_usuario for _, rol, _, id_usuario in resultados if rol.nombre == 'delegate']
 
     # Cargar equipos de entrenadores
     equipos_entrenadores = (
@@ -900,7 +900,7 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int, solo_activos: bo
         }
 
         # Obtener equipo según el rol (usando mapas en lugar de queries individuales)
-        if rol.nombre == 'jugador':
+        if rol.nombre == 'player':
             jugador = jugadores_map.get(id_usuario)
             if jugador:
                 usuario_data["id_equipo"] = jugador.id_equipo
@@ -908,13 +908,13 @@ def obtener_usuarios_con_rol_en_liga(db: Session, liga_id: int, solo_activos: bo
                 if equipo:
                     usuario_data["nombre_equipo"] = equipo.nombre
                     usuario_data["estadio"] = equipo.estadio
-        elif rol.nombre == 'entrenador':
+        elif rol.nombre == 'coach':
             equipo = equipos_por_entrenador_map.get(id_usuario)
             if equipo:
                 usuario_data["id_equipo"] = equipo.id_equipo
                 usuario_data["nombre_equipo"] = equipo.nombre
                 usuario_data["estadio"] = equipo.estadio
-        elif rol.nombre == 'delegado':
+        elif rol.nombre == 'delegate':
             equipo = equipos_por_delegado_map.get(id_usuario)
             if equipo:
                 usuario_data["id_equipo"] = equipo.id_equipo

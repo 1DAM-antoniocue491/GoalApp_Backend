@@ -3,9 +3,41 @@
 Schemas de validación para el recurso Invitación.
 Define los modelos Pydantic para request/response de la API relacionados con invitaciones a ligas.
 """
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 from datetime import datetime
+
+
+PLAYER_ROLE_ID = 4  # init.sql: 1=admin, 2=coach, 3=delegate, 4=player, 5=viewer
+
+
+def _validar_campos_jugador(id_rol: int, id_equipo: int | None, dorsal: str | None, posicion: str | None) -> None:
+    """
+    Valida los campos mínimos para invitar a un jugador.
+
+    La tabla `jugadores` tiene `dorsal INT NOT NULL` y `posicion NOT NULL`, por eso
+    estos datos deben bloquearse ya en el schema cuando `id_rol == 4`.
+    """
+    if id_rol != PLAYER_ROLE_ID:
+        return
+
+    if id_equipo is None:
+        raise ValueError("El equipo es obligatorio cuando el rol invitado es jugador")
+
+    dorsal_limpio = str(dorsal).strip() if dorsal is not None else ""
+    if not dorsal_limpio:
+        raise ValueError("El dorsal es obligatorio cuando el rol invitado es jugador")
+
+    try:
+        dorsal_int = int(dorsal_limpio)
+    except ValueError:
+        raise ValueError("El dorsal debe ser un número entero")
+
+    if dorsal_int < 0:
+        raise ValueError("El dorsal no puede ser negativo")
+
+    if not (posicion or "").strip():
+        raise ValueError("La posición es obligatoria cuando el rol invitado es jugador")
 
 
 class InvitacionCreate(BaseModel):
@@ -13,16 +45,7 @@ class InvitacionCreate(BaseModel):
     Schema para crear una invitación a una liga.
 
     Se usa en el endpoint POST /invitaciones/ligas/{liga_id}/invitar donde el admin
-    invita a un usuario a unirse a su liga con un rol específico.
-
-    Attributes:
-        nombre (str): Nombre completo del usuario invitado
-        email (EmailStr): Email del usuario invitado
-        id_rol (int): ID del rol a asignar (1=admin, 2=coach, 3=delegate, 4=player, 5=viewer)
-        id_equipo (int | None): ID del equipo (nullable para rol viewer)
-        dorsal (str | None): Número de dorsal asignado
-        posicion (str | None): Posición del jugador
-        tipo_jugador (str | None): Tipo de jugador (titular, suplente, etc.)
+    o entrenador autorizado invita a un usuario con un rol específico.
     """
     nombre: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
@@ -32,26 +55,15 @@ class InvitacionCreate(BaseModel):
     posicion: Optional[str] = Field(None, max_length=50)
     tipo_jugador: Optional[str] = Field(None, max_length=50)
 
+    @model_validator(mode="after")
+    def validar_datos_deportivos_si_es_jugador(self):
+        """Evita crear invitaciones player incompletas que luego fallarían al aceptar."""
+        _validar_campos_jugador(self.id_rol, self.id_equipo, self.dorsal, self.posicion)
+        return self
+
 
 class InvitacionValidarResponse(BaseModel):
-    """
-    Schema de respuesta para validar una invitación.
-
-    Se usa en el endpoint GET /invitaciones/validar/{token} para que el frontend
-    pueda verificar si un token es válido antes de mostrar el formulario de registro.
-
-    Attributes:
-        valido (bool): True si el token es válido
-        email (str | None): Email del invitado (si es válido)
-        nombre (str | None): Nombre completo del invitado (si es válido)
-        liga_nombre (str | None): Nombre de la liga (si es válido)
-        equipo_nombre (str | None): Nombre del equipo (si es válido)
-        rol (str | None): Nombre del rol (si es válido)
-        dorsal (str | None): Número de dorsal asignado
-        posicion (str | None): Posición del jugador
-        tipo_jugador (str | None): Tipo de jugador
-        motivo (str | None): Motivo por el que no es válido (si no lo es)
-    """
+    """Schema de respuesta para validar una invitación antes de aceptarla."""
     valido: bool
     email: Optional[str] = None
     nombre: Optional[str] = None
@@ -65,36 +77,14 @@ class InvitacionValidarResponse(BaseModel):
 
 
 class InvitacionAceptar(BaseModel):
-    """
-    Schema para aceptar una invitación y crear usuario.
-
-    Se usa en el endpoint POST /invitaciones/aceptar/{token} donde el usuario
-    se registra aceptando la invitación.
-
-    Attributes:
-        email (EmailStr): Email del usuario (debe coincidir con la invitación)
-        password (str): Contraseña del usuario (mínimo 6 caracteres)
-        nombre (str): Nombre del usuario
-    """
+    """Schema para aceptar una invitación por token y crear usuario si hace falta."""
     email: EmailStr
     password: str = Field(..., min_length=6)
     nombre: str = Field(..., min_length=2, max_length=100)
 
 
 class InvitacionCodigoCreate(BaseModel):
-    """
-    Schema para solicitar generación de código de invitación.
-
-    Se usa en el endpoint POST /ligas/{liga_id}/generar-codigo.
-
-    Attributes:
-        id_rol (int): ID del rol a asignar (1=admin, 2=coach, 3=delegate, 4=player, 5=viewer)
-        id_equipo (int | None): ID del equipo (nullable para rol viewer)
-        nombre (str | None): Nombre opcional del invitado
-        dorsal (str | None): Número de dorsal asignado
-        posicion (str | None): Posición del jugador
-        tipo_jugador (str | None): Tipo de jugador (titular, suplente, etc.)
-    """
+    """Schema para solicitar generación de código de invitación."""
     id_rol: int = Field(..., ge=1)
     id_equipo: Optional[int] = Field(None, ge=1)
     nombre: Optional[str] = Field(None, max_length=100)
@@ -102,18 +92,15 @@ class InvitacionCodigoCreate(BaseModel):
     posicion: Optional[str] = Field(None, max_length=50)
     tipo_jugador: Optional[str] = Field(None, max_length=50)
 
+    @model_validator(mode="after")
+    def validar_datos_deportivos_si_es_jugador(self):
+        """El código también necesita datos deportivos completos si invita a player."""
+        _validar_campos_jugador(self.id_rol, self.id_equipo, self.dorsal, self.posicion)
+        return self
+
 
 class InvitacionCodigoResponse(BaseModel):
-    """
-    Schema de respuesta para código de invitación generado.
-
-    Attributes:
-        codigo (str): Código corto alfanumérico (6-8 caracteres)
-        rol (str): Nombre del rol asignado
-        liga (str): Nombre de la liga
-        expiracion (datetime): Fecha de expiración del código
-        id_equipo (int | None): ID del equipo (si aplica)
-    """
+    """Schema de respuesta para código de invitación generado."""
     codigo: str
     rol: str
     liga: str
@@ -125,12 +112,8 @@ class InvitacionAceptarCodigo(BaseModel):
     """
     Schema para aceptar invitación mediante código corto.
 
-    Se usa en el endpoint POST /invitaciones/aceptar-codigo/{codigo}.
-
-    Attributes:
-        email (EmailStr): Email del usuario (requerido si no autenticado)
-        password (str): Contraseña del usuario (mínimo 6 caracteres, requerido si no autenticado)
-        nombre (str): Nombre del usuario (requerido si no autenticado)
+    Si el usuario ya está autenticado, el router puede usar current_user y estos
+    campos pueden omitirse. Si no, email, password y nombre son necesarios.
     """
     email: Optional[EmailStr] = None
     password: Optional[str] = Field(None, min_length=6)

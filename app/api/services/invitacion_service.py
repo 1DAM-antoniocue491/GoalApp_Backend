@@ -1,11 +1,15 @@
 """
 Servicio de lógica de negocio para Invitaciones.
 Maneja la creación, validación y aceptación de invitaciones a ligas.
-Soporta dos métodos de invitación:
-- Token UUID (64 chars hex) - enviado por email
-- Código corto (6-8 chars alfanuméricos) - generado sin email
+
+Puntos críticos corregidos:
+- No se usa `Jugador = None`; el modelo Jugador se importa localmente solo cuando hace falta.
+- Un jugador nunca se inserta con `dorsal=None`, porque `jugadores.dorsal` es INT NOT NULL.
+- La creación de Usuario usa `contraseña_hash`, que es el campo real del modelo SQLAlchemy.
+- Token, código y usuario existente reutilizan la misma lógica para crear/actualizar Jugador.
 """
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
 import secrets
 from typing import Optional, Dict, Any
@@ -19,8 +23,377 @@ from app.models.usuario_rol import UsuarioRol
 from app.api.services.email_service import enviar_email_invitacion
 from app.config import settings
 
-# Importación diferida para evitar circular import
-Jugador = None  # Se importa cuando se necesita
+
+# Roles canónicos definidos en la base de datos.
+ROLE_ADMIN = "admin"
+ROLE_COACH = "coach"
+ROLE_DELEGATE = "delegate"
+ROLE_PLAYER = "player"
+ROLE_VIEWER = "viewer"
+
+# Compatibilidad defensiva por si algún punto heredado devuelve roles en español.
+ROLE_ALIASES = {
+    "administrador": ROLE_ADMIN,
+    "entrenador": ROLE_COACH,
+    "delegado": ROLE_DELEGATE,
+    "jugador": ROLE_PLAYER,
+    "observador": ROLE_VIEWER,
+}
+
+DEFAULT_EXPIRATION_DAYS = 7
+CODE_LENGTH_DEFAULT = 8
+EMAIL_PLACEHOLDER_CODIGO = "placeholder@invitacion.codigo"
+
+
+# ============================================================
+# UTILIDADES INTERNAS
+# ============================================================
+
+
+def _now_utc() -> datetime:
+    """Devuelve una fecha aware en UTC para comparar expiraciones sin errores naive/aware."""
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normaliza fechas de BD que puedan venir sin zona horaria."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _normalizar_email(email: str) -> str:
+    """Evita duplicados por mayúsculas o espacios accidentales."""
+    return str(email).strip().lower()
+
+
+def _normalizar_rol(nombre: str | None) -> str:
+    """Convierte posibles nombres heredados al nombre real usado por la BD."""
+    if not nombre:
+        return ""
+    nombre_limpio = nombre.strip().lower()
+    return ROLE_ALIASES.get(nombre_limpio, nombre_limpio)
+
+
+def _get_jugador_model():
+    """
+    Importa Jugador de forma local.
+
+    Esto elimina el patrón `Jugador = None`, que rompía el flujo al intentar hacer
+    `db.query(Jugador)` o `Jugador(...)` sin haber importado realmente el modelo.
+    """
+    from app.models.jugador import Jugador
+
+    return Jugador
+
+
+def _obtener_rol(db: Session, id_rol: int) -> Rol:
+    """Obtiene el rol o lanza un error claro antes de continuar."""
+    rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
+    if not rol:
+        raise ValueError("Rol no encontrado")
+    return rol
+
+
+def _obtener_nombre_rol(db: Session, id_rol: int) -> str:
+    """Obtiene el nombre canónico del rol desde su ID."""
+    return _normalizar_rol(_obtener_rol(db, id_rol).nombre)
+
+
+def _obtener_equipo_de_liga(db: Session, id_equipo: Optional[int], id_liga: int) -> Optional[Equipo]:
+    """Comprueba que el equipo exista y pertenezca a la liga de la invitación."""
+    if id_equipo is None:
+        return None
+
+    equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
+    if not equipo:
+        raise ValueError("Equipo no encontrado")
+    if equipo.id_liga != id_liga:
+        raise ValueError("El equipo indicado no pertenece a la liga de la invitación")
+    return equipo
+
+
+def _parse_dorsal_obligatorio(raw_dorsal: Any) -> int:
+    """
+    Convierte dorsal a int y garantiza que no sea None.
+
+    La tabla `jugadores` define `dorsal INT NOT NULL`; por tanto, si falta el dato
+    se rechaza la operación antes de que SQLAlchemy intente insertar NULL.
+    """
+    if raw_dorsal is None:
+        raise ValueError("El dorsal es obligatorio para crear un jugador")
+
+    dorsal_texto = str(raw_dorsal).strip()
+    if not dorsal_texto:
+        raise ValueError("El dorsal es obligatorio para crear un jugador")
+
+    try:
+        dorsal = int(dorsal_texto)
+    except (TypeError, ValueError):
+        raise ValueError("El dorsal debe ser un número entero")
+
+    if dorsal < 0:
+        raise ValueError("El dorsal no puede ser negativo")
+
+    return dorsal
+
+
+def _validar_datos_jugador(
+    db: Session,
+    id_liga: int,
+    id_equipo: Optional[int],
+    dorsal: Optional[str],
+    posicion: Optional[str],
+) -> tuple[Equipo, int, str]:
+    """
+    Valida y normaliza los datos obligatorios para crear un Jugador.
+
+    Devuelve equipo validado, dorsal entero y posición limpia. Esta función debe
+    ejecutarse antes de crear invitaciones player y antes de aceptar invitaciones.
+    """
+    equipo = _obtener_equipo_de_liga(db, id_equipo, id_liga)
+    if not equipo:
+        raise ValueError("El equipo es obligatorio para invitar o crear un jugador")
+
+    dorsal_int = _parse_dorsal_obligatorio(dorsal)
+
+    posicion_limpia = (posicion or "").strip()
+    if not posicion_limpia:
+        raise ValueError("La posición es obligatoria para crear un jugador")
+
+    return equipo, dorsal_int, posicion_limpia
+
+
+def _validar_invitacion_jugador_si_aplica(
+    db: Session,
+    id_liga: int,
+    id_rol: int,
+    id_equipo: Optional[int],
+    dorsal: Optional[str],
+    posicion: Optional[str],
+) -> None:
+    """Valida campos deportivos solo cuando el rol invitado es player."""
+    if _obtener_nombre_rol(db, id_rol) == ROLE_PLAYER:
+        _validar_datos_jugador(db, id_liga, id_equipo, dorsal, posicion)
+
+
+def _crear_o_actualizar_usuario_rol(
+    db: Session,
+    id_usuario: int,
+    id_liga: int,
+    id_rol: int,
+    activo: int,
+) -> UsuarioRol:
+    """
+    Crea o actualiza el rol del usuario en una liga.
+
+    Se mantiene una única asignación por usuario/liga para evitar estados ambiguos
+    en frontend: un usuario no debería aparecer dos veces con roles distintos.
+    """
+    asignacion = db.query(UsuarioRol).filter(
+        UsuarioRol.id_usuario == id_usuario,
+        UsuarioRol.id_liga == id_liga
+    ).first()
+
+    if asignacion:
+        asignacion.id_rol = id_rol
+        asignacion.activo = activo
+    else:
+        asignacion = UsuarioRol(
+            id_usuario=id_usuario,
+            id_rol=id_rol,
+            id_liga=id_liga,
+            activo=activo
+        )
+        db.add(asignacion)
+
+    db.flush()
+    return asignacion
+
+
+def _crear_o_actualizar_jugador(
+    db: Session,
+    id_usuario: int,
+    id_liga: int,
+    id_equipo: Optional[int],
+    dorsal: Optional[str],
+    posicion: Optional[str],
+):
+    """
+    Crea o actualiza el registro `Jugador` que luego usan las convocatorias.
+
+    Las convocatorias trabajan con `id_jugador`, no con `id_usuario`. Si esta fila
+    no existe, la convocatoria no puede listar ni seleccionar correctamente jugadores.
+    """
+    Jugador = _get_jugador_model()
+    equipo, dorsal_int, posicion_limpia = _validar_datos_jugador(
+        db=db,
+        id_liga=id_liga,
+        id_equipo=id_equipo,
+        dorsal=dorsal,
+        posicion=posicion,
+    )
+
+    jugador_existente = db.query(Jugador).filter(
+        Jugador.id_usuario == id_usuario
+    ).first()
+
+    # El modelo actual marca id_usuario como unique: un usuario solo puede tener un registro jugador.
+    if jugador_existente and jugador_existente.id_equipo != equipo.id_equipo:
+        raise ValueError("Este usuario ya está registrado como jugador en otro equipo")
+
+    dorsal_ocupado = db.query(Jugador).filter(
+        Jugador.id_equipo == equipo.id_equipo,
+        Jugador.dorsal == dorsal_int,
+        Jugador.id_usuario != id_usuario,
+        Jugador.activo == True
+    ).first()
+    if dorsal_ocupado:
+        raise ValueError(f"El dorsal {dorsal_int} ya está asignado en este equipo")
+
+    if jugador_existente:
+        # Si el jugador ya existe, actualizamos datos deportivos y lo dejamos activo.
+        jugador_existente.dorsal = dorsal_int
+        jugador_existente.posicion = posicion_limpia
+        jugador_existente.activo = True
+        jugador = jugador_existente
+    else:
+        jugador = Jugador(
+            id_usuario=id_usuario,
+            id_equipo=equipo.id_equipo,
+            dorsal=dorsal_int,
+            posicion=posicion_limpia,
+            activo=True
+        )
+        db.add(jugador)
+
+    db.flush()
+    return jugador
+
+
+def _aplicar_relacion_equipo_si_corresponde(
+    db: Session,
+    id_usuario: int,
+    id_liga: int,
+    id_rol: int,
+    id_equipo: Optional[int],
+    dorsal: Optional[str],
+    posicion: Optional[str],
+):
+    """
+    Aplica la parte dependiente del equipo según el rol.
+
+    - player: crea/actualiza Jugador.
+    - coach: asigna Equipo.id_entrenador.
+    - delegate: asigna Equipo.id_delegado.
+    - admin/viewer: no necesitan equipo.
+    """
+    rol_nombre = _obtener_nombre_rol(db, id_rol)
+
+    if rol_nombre == ROLE_PLAYER:
+        return _crear_o_actualizar_jugador(
+            db=db,
+            id_usuario=id_usuario,
+            id_liga=id_liga,
+            id_equipo=id_equipo,
+            dorsal=dorsal,
+            posicion=posicion,
+        )
+
+    if rol_nombre in {ROLE_COACH, ROLE_DELEGATE}:
+        equipo = _obtener_equipo_de_liga(db, id_equipo, id_liga)
+        if not equipo:
+            raise ValueError("El equipo es obligatorio para asignar entrenador o delegado")
+
+        if rol_nombre == ROLE_COACH:
+            equipo.id_entrenador = id_usuario
+        else:
+            equipo.id_delegado = id_usuario
+
+        db.flush()
+        return equipo
+
+    return None
+
+
+def _respuesta_validacion(invitacion: Invitacion, rol: Optional[Rol], liga: Optional[Liga], equipo: Optional[Equipo]) -> Dict[str, Any]:
+    """Construye la respuesta que usa el frontend para pintar la pantalla de aceptación."""
+    return {
+        "valido": True,
+        "email": invitacion.email,
+        "nombre": invitacion.nombre,
+        "liga_nombre": liga.nombre if liga else "Desconocida",
+        "equipo_nombre": equipo.nombre if equipo else None,
+        "rol": rol.nombre if rol else ROLE_PLAYER,
+        "dorsal": invitacion.dorsal,
+        "posicion": invitacion.posicion,
+        "tipo_jugador": invitacion.tipo_jugador,
+        "id_equipo": invitacion.id_equipo,
+        "fecha_expiracion": invitacion.fecha_expiracion,
+    }
+
+
+def _validar_no_usada_ni_expirada(invitacion: Invitacion, tipo: str) -> Optional[Dict[str, Any]]:
+    """Devuelve un error de validación si la invitación no puede usarse."""
+    if invitacion.usada:
+        return {"valido": False, "motivo": f"{tipo} ya utilizado"}
+    if _as_utc(invitacion.fecha_expiracion) < _now_utc():
+        return {"valido": False, "motivo": f"{tipo} expirado"}
+    return None
+
+
+def _crear_usuario(db: Session, email: str, password: str, nombre: str) -> Usuario:
+    """Crea un usuario usando el campo real del modelo: contraseña_hash."""
+    from app.api.services.usuario_service import hash_password
+
+    usuario = Usuario(
+        email=_normalizar_email(email),
+        contraseña_hash=hash_password(password),
+        nombre=nombre.strip()
+    )
+    db.add(usuario)
+    db.flush()  # Necesario para obtener id_usuario antes de crear UsuarioRol/Jugador.
+    return usuario
+
+
+def _aceptar_invitacion_para_usuario(
+    db: Session,
+    invitacion: Invitacion,
+    usuario: Usuario,
+    activo: int = 1,
+) -> Usuario:
+    """
+    Núcleo único de aceptación para token, código y usuario existente.
+
+    Aquí se concentra la lógica que antes estaba duplicada en varias funciones y
+    provocaba diferencias: unas importaban Jugador y otras no, unas validaban y otras no.
+    """
+    _crear_o_actualizar_usuario_rol(
+        db=db,
+        id_usuario=usuario.id_usuario,
+        id_liga=invitacion.id_liga,
+        id_rol=invitacion.id_rol,
+        activo=activo,
+    )
+
+    _aplicar_relacion_equipo_si_corresponde(
+        db=db,
+        id_usuario=usuario.id_usuario,
+        id_liga=invitacion.id_liga,
+        id_rol=invitacion.id_rol,
+        id_equipo=invitacion.id_equipo,
+        dorsal=invitacion.dorsal,
+        posicion=invitacion.posicion,
+    )
+
+    invitacion.usada = True
+    db.flush()
+    return usuario
+
+
+# ============================================================
+# FUNCIONES PÚBLICAS DEL SERVICIO
+# ============================================================
 
 
 def generar_token() -> str:
@@ -28,28 +401,20 @@ def generar_token() -> str:
     return secrets.token_hex(32)
 
 
-def generar_codigo_unico(db: Session, longitud: int = 8) -> str:
+def generar_codigo_unico(db: Session, longitud: int = CODE_LENGTH_DEFAULT) -> str:
     """
-    Genera un código alfanumérico único de 6-8 caracteres (mayúsculas).
+    Genera un código alfanumérico único de 6-8 caracteres en mayúsculas.
 
     Args:
-        db: Sesión de base de datos
-        longitud: Longitud del código (default: 8)
-
-    Returns:
-        str: Código alfanumérico único
-
-    Raises:
-        ValueError: Si no puede generar un código único tras 10 intentos
+        db: Sesión de base de datos.
+        longitud: Longitud del código. Por defecto 8 para mantener compatibilidad.
     """
     import string
 
-    alfabeto = string.ascii_uppercase + string.digits  # A-Z, 0-9
+    alfabeto = string.ascii_uppercase + string.digits
 
-    for _ in range(10):  # Máximo 10 intentos
+    for _ in range(10):
         codigo = ''.join(secrets.choice(alfabeto) for _ in range(longitud))
-
-        # Verificar unicidad
         existente = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
         if not existente:
             return codigo
@@ -58,17 +423,8 @@ def generar_codigo_unico(db: Session, longitud: int = 8) -> str:
 
 
 def verificar_usuario_existente(db: Session, email: str) -> Optional[Usuario]:
-    """
-    Verifica si existe un usuario con el email dado.
-
-    Args:
-        db: Sesión de base de datos
-        email: Email a buscar
-
-    Returns:
-        Usuario si existe, None si no
-    """
-    return db.query(Usuario).filter(Usuario.email == email.lower()).first()
+    """Verifica si existe un usuario con el email dado."""
+    return db.query(Usuario).filter(Usuario.email == _normalizar_email(email)).first()
 
 
 def asignar_rol_directamente(
@@ -85,71 +441,36 @@ def asignar_rol_directamente(
     """
     Asigna un rol a un usuario existente en una liga.
 
-    Args:
-        db: Sesión de base de datos
-        id_usuario: ID del usuario
-        id_liga: ID de la liga
-        id_rol: ID del rol a asignar
-        id_equipo: ID del equipo (opcional)
-        dorsal: Dorsal asignado (opcional)
-        posicion: Posición del jugador (opcional)
-        tipo_jugador: Tipo de jugador (opcional)
-        nombre: Nombre del usuario (para actualizar si no tiene)
+    Mantiene la firma original del proyecto. Si el rol es player, también crea o
+    actualiza `Jugador` con validación estricta de equipo, dorsal y posición.
     """
-    # Verificar si el usuario ya tiene alguna asignación en esta liga
-    asignacion_existente = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == id_usuario,
-        UsuarioRol.id_liga == id_liga
-    ).first()
+    try:
+        usuario = db.query(Usuario).filter(Usuario.id_usuario == id_usuario).first()
+        if not usuario:
+            raise ValueError("Usuario no encontrado")
 
-    if asignacion_existente:
-        # Actualizar el rol al nuevo rol especificado
-        asignacion_existente.id_rol = id_rol
-        asignacion_existente.activo = 0  # Pendiente hasta que el usuario acepte
-        db.commit()
-    else:
-        # Crear nueva asignación
-        usuario_rol = UsuarioRol(
+        if nombre and not usuario.nombre:
+            usuario.nombre = nombre.strip()
+
+        _validar_invitacion_jugador_si_aplica(db, id_liga, id_rol, id_equipo, dorsal, posicion)
+
+        # Se conserva el comportamiento original: queda pendiente hasta aceptación posterior.
+        _crear_o_actualizar_usuario_rol(db, id_usuario, id_liga, id_rol, activo=0)
+
+        _aplicar_relacion_equipo_si_corresponde(
+            db=db,
             id_usuario=id_usuario,
-            id_rol=id_rol,
             id_liga=id_liga,
-            activo=0  # Pendiente hasta que el usuario acepte
+            id_rol=id_rol,
+            id_equipo=id_equipo,
+            dorsal=dorsal,
+            posicion=posicion,
         )
-        db.add(usuario_rol)
-        db.commit()
 
-    # Si es rol jugador o coach y hay equipo, manejar asignación
-    rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
-    if rol and id_equipo:
-        if rol.nombre == "player":
-            # Verificar si ya existe el jugador
-            jugador_existente = db.query(Jugador).filter(
-                Jugador.id_usuario == id_usuario,
-                Jugador.id_equipo == id_equipo
-            ).first()
-            if not jugador_existente:
-                # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
-                dorsal_int = int(dorsal) if dorsal else None
-                jugador = Jugador(
-                    id_usuario=id_usuario,
-                    id_equipo=id_equipo,
-                    dorsal=dorsal_int,
-                    posicion=posicion,
-                    )
-                db.add(jugador)
-                db.commit()
-        elif rol.nombre == "coach":
-            # Asignar usuario como entrenador del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
-            if equipo:
-                equipo.id_entrenador = id_usuario
-                db.commit()
-        elif rol.nombre == "delegate":
-            # Asignar usuario como delegado del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
-            if equipo:
-                equipo.id_delegado = id_usuario
-                db.commit()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def crear_invitacion(
@@ -165,43 +486,26 @@ def crear_invitacion(
     nombre: Optional[str] = None
 ) -> Invitacion:
     """
-    Crea una nueva invitación en la base de datos.
+    Crea una nueva invitación por email.
 
-    Genera un token único, calcula la fecha de expiración (7 días) y guarda
-    la invitación.
-
-    Args:
-        db: Sesión de base de datos
-        email: Email del usuario invitado
-        id_liga: ID de la liga
-        id_rol: ID del rol a asignar
-        id_equipo: ID del equipo (opcional)
-        dorsal: Dorsal asignado (opcional)
-        posicion: Posición del jugador (opcional)
-        tipo_jugador: Tipo de jugador (opcional)
-        invitado_por: ID del usuario que envía la invitación (opcional)
-        nombre: Nombre completo del usuario invitado (opcional)
-
-    Returns:
-        Invitacion: Objeto Invitacion creado con su token
+    Antes de guardar una invitación player valida que tenga equipo, dorsal y posición,
+    evitando aceptar más tarde una invitación imposible de convertir en Jugador.
     """
     try:
-        # Generar token único
+        _validar_invitacion_jugador_si_aplica(db, id_liga, id_rol, id_equipo, dorsal, posicion)
+
         token = generar_token()
+        fecha_expiracion = _now_utc() + timedelta(days=DEFAULT_EXPIRATION_DAYS)
 
-        # Calcular fecha de expiración (7 días desde ahora)
-        fecha_expiracion = datetime.now(timezone.utc) + timedelta(days=7)
-
-        # Crear invitación
         invitacion = Invitacion(
             token=token,
-            email=email.lower().strip(),
-            nombre=nombre,
+            email=_normalizar_email(email),
+            nombre=nombre.strip() if nombre else None,
             id_liga=id_liga,
             id_equipo=id_equipo,
             id_rol=id_rol,
-            dorsal=dorsal,
-            posicion=posicion,
+            dorsal=str(dorsal).strip() if dorsal is not None else None,
+            posicion=posicion.strip() if posicion else None,
             tipo_jugador=tipo_jugador,
             invitado_por=invitado_por,
             fecha_expiracion=fecha_expiracion,
@@ -212,27 +516,21 @@ def crear_invitacion(
         db.commit()
         db.refresh(invitacion)
 
-        # Enviar email de invitación (fuera de la transacción principal)
+        # El envío de email no debe revertir la invitación si falla el proveedor SMTP.
         try:
-            # Obtener nombres para el email
             liga = db.query(Liga).filter(Liga.id_liga == id_liga).first()
             rol = db.query(Rol).filter(Rol.id_rol == id_rol).first()
-            equipo = None
-            if id_equipo:
-                equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first()
-
-            invitador = None
-            if invitado_por:
-                invitador = db.query(Usuario).filter(Usuario.id_usuario == invitado_por).first()
+            equipo = db.query(Equipo).filter(Equipo.id_equipo == id_equipo).first() if id_equipo else None
+            invitador = db.query(Usuario).filter(Usuario.id_usuario == invitado_por).first() if invitado_por else None
 
             enlace_aceptar = f"{settings.FRONTEND_URL}/register?invitation_token={token}"
 
             enviar_email_invitacion(
                 email_destino=email,
-                nombre_invitado=nombre or email.split('@')[0],  # Usar nombre proporcionado o parte local del email
+                nombre_invitado=nombre or email.split('@')[0],
                 liga_nombre=liga.nombre if liga else "Liga",
                 equipo_nombre=equipo.nombre if equipo else None,
-                rol=rol.nombre if rol else "player",
+                rol=rol.nombre if rol else ROLE_PLAYER,
                 dorsal=dorsal or "-",
                 posicion=posicion or "-",
                 tipo_jugador=tipo_jugador or "titular",
@@ -240,12 +538,10 @@ def crear_invitacion(
                 enlace_aceptar=enlace_aceptar
             )
         except Exception as e:
-            # Log error pero no fallar la creación de invitación
             print(f"[ERROR] No se pudo enviar email de invitación: {e}")
 
         return invitacion
     except Exception as e:
-        # Rollback en caso de error crítico
         db.rollback()
         print(f"[ERROR] Error crítico al crear invitación: {e}")
         raise
@@ -263,106 +559,60 @@ def generar_codigo_invitacion(
     tipo_jugador: Optional[str] = None
 ) -> Invitacion:
     """
-    Genera un código corto de invitación SIN enviar email.
+    Genera un código corto de invitación sin enviar email.
 
-    Crea una invitación con código alfanumérico único (6-8 caracteres)
-    que puede ser usado UNA sola vez. NO envía email automáticamente.
-
-    Args:
-        db: Sesión de base de datos
-        id_liga: ID de la liga
-        id_rol: ID del rol a asignar
-        id_equipo: ID del equipo (opcional)
-        invitado_por: ID del usuario que genera el código (opcional)
-        nombre: Nombre opcional del invitado
-        dorsal: Dorsal asignado (opcional)
-        posicion: Posición del jugador (opcional)
-        tipo_jugador: Tipo de jugador (opcional)
-
-    Returns:
-        Invitacion: Objeto Invitacion creado con su código
-
-    Raises:
-        ValueError: Si no puede generar un código único
+    Para player, el código también debe llevar equipo, dorsal y posición porque al
+    aceptar se creará la fila `jugadores` inmediatamente.
     """
-    # Generar código único
-    codigo = generar_codigo_unico(db)
+    try:
+        _validar_invitacion_jugador_si_aplica(db, id_liga, id_rol, id_equipo, dorsal, posicion)
 
-    # Calcular fecha de expiración (7 días desde ahora)
-    fecha_expiracion = datetime.now(timezone.utc) + timedelta(days=7)
+        codigo = generar_codigo_unico(db)
+        fecha_expiracion = _now_utc() + timedelta(days=DEFAULT_EXPIRATION_DAYS)
 
-    # Crear invitación con código (email requerido pero puede ser placeholder)
-    invitacion = Invitacion(
-        token=generar_token(),  # Token UUID también se genera para compatibilidad
-        codigo=codigo,
-        email="placeholder@invitacion.codigo",  # Placeholder - no se usa email
-        nombre=nombre,
-        id_liga=id_liga,
-        id_equipo=id_equipo,
-        id_rol=id_rol,
-        dorsal=dorsal,
-        posicion=posicion,
-        tipo_jugador=tipo_jugador,
-        invitado_por=invitado_por,
-        fecha_expiracion=fecha_expiracion,
-        usada=False
-    )
+        invitacion = Invitacion(
+            token=generar_token(),
+            codigo=codigo,
+            email=EMAIL_PLACEHOLDER_CODIGO,
+            nombre=nombre.strip() if nombre else None,
+            id_liga=id_liga,
+            id_equipo=id_equipo,
+            id_rol=id_rol,
+            dorsal=str(dorsal).strip() if dorsal is not None else None,
+            posicion=posicion.strip() if posicion else None,
+            tipo_jugador=tipo_jugador,
+            invitado_por=invitado_por,
+            fecha_expiracion=fecha_expiracion,
+            usada=False
+        )
 
-    db.add(invitacion)
-    db.commit()
-    db.refresh(invitacion)
-
-    return invitacion
+        db.add(invitacion)
+        db.commit()
+        db.refresh(invitacion)
+        return invitacion
+    except Exception:
+        db.rollback()
+        raise
 
 
 def validar_codigo_invitacion(db: Session, codigo: str) -> Dict[str, Any]:
-    """
-    Valida un código corto de invitación.
-
-    Verifica que el código exista, no esté usado y no haya expirado.
-
-    Args:
-        db: Sesión de base de datos
-        codigo: Código a validar
-
-    Returns:
-        Dict con:
-            - valido (bool): True si es válido
-            - motivo (str): Motivo si no es válido
-            - email, liga_nombre, equipo_nombre, rol, etc. si es válido
-    """
-    # Buscar invitación por código
-    invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
+    """Valida un código corto de invitación."""
+    invitacion = db.query(Invitacion).filter(
+        Invitacion.codigo == codigo.strip().upper()
+    ).first()
 
     if not invitacion:
         return {"valido": False, "motivo": "Código no encontrado"}
 
-    if invitacion.usada:
-        return {"valido": False, "motivo": "Código ya utilizado"}
+    error = _validar_no_usada_ni_expirada(invitacion, "Código")
+    if error:
+        return error
 
-    if invitacion.fecha_expiracion < datetime.now(timezone.utc):
-        return {"valido": False, "motivo": "Código expirado"}
-
-    # Código válido, obtener información adicional
     liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
     rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-    equipo = None
-    if invitacion.id_equipo:
-        equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+    equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first() if invitacion.id_equipo else None
 
-    return {
-        "valido": True,
-        "email": invitacion.email,
-        "nombre": invitacion.nombre,
-        "liga_nombre": liga.nombre if liga else "Desconocida",
-        "equipo_nombre": equipo.nombre if equipo else None,
-        "rol": rol.nombre if rol else "player",
-        "dorsal": invitacion.dorsal,
-        "posicion": invitacion.posicion,
-        "tipo_jugador": invitacion.tipo_jugador,
-        "id_equipo": invitacion.id_equipo,
-        "fecha_expiracion": invitacion.fecha_expiracion
-    }
+    return _respuesta_validacion(invitacion, rol, liga, equipo)
 
 
 def aceptar_invitacion_por_codigo(
@@ -375,87 +625,37 @@ def aceptar_invitacion_por_codigo(
     """
     Acepta una invitación mediante código corto y crea usuario.
 
-    Valida el código, verifica que el usuario no exista,
-    crea el usuario y asigna el rol.
-
-    Args:
-        db: Sesión de base de datos
-        codigo: Código de la invitación
-        email: Email del usuario
-        password: Contraseña del usuario
-        nombre: Nombre del usuario
-
-    Returns:
-        Usuario: Usuario creado
-
-    Raises:
-        ValueError: Si el código es inválido o usuario ya existe
+    Corrige dos errores originales: usa `contraseña_hash` y crea Jugador con dorsal
+    obligatorio validado, no con `None`.
     """
-    # Validar código
-    validacion = validar_codigo_invitacion(db, codigo)
-    if not validacion["valido"]:
-        raise ValueError(f"Código inválido: {validacion.get('motivo', 'desconocido')}")
+    try:
+        validacion = validar_codigo_invitacion(db, codigo)
+        if not validacion["valido"]:
+            raise ValueError(f"Código inválido: {validacion.get('motivo', 'desconocido')}")
 
-    # Verificar que el usuario no exista ya
-    usuario_existente = db.query(Usuario).filter(Usuario.email == email.lower()).first()
-    if usuario_existente:
-        raise ValueError("El email ya está registrado. Inicia sesión en su lugar.")
+        email_normalizado = _normalizar_email(email)
+        usuario_existente = db.query(Usuario).filter(Usuario.email == email_normalizado).first()
+        if usuario_existente:
+            raise ValueError("El email ya está registrado. Inicia sesión en su lugar.")
 
-    # Obtener invitación completa
-    invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
-    if not invitacion:
-        raise ValueError("Invitación no encontrada")
+        invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo.strip().upper()).first()
+        if not invitacion:
+            raise ValueError("Invitación no encontrada")
 
-    # Crear nuevo usuario
-    from app.api.services.usuario_service import hash_password
-    usuario = Usuario(
-        email=email.lower().strip(),
-        password=hash_password(password),
-        nombre=nombre.strip()
-    )
-    db.add(usuario)
-    db.flush()
+        usuario = _crear_usuario(db, email_normalizado, password, nombre)
 
-    # Asignar rol activo
-    usuario_rol = UsuarioRol(
-        id_usuario=usuario.id_usuario,
-        id_rol=invitacion.id_rol,
-        id_liga=invitacion.id_liga,
-        activo=1
-    )
-    db.add(usuario_rol)
+        # En códigos cortos se reemplaza el email placeholder por el email real usado al registrarse.
+        invitacion.email = email_normalizado
+        if nombre:
+            invitacion.nombre = nombre.strip()
 
-    # Si es jugador con equipo, crear entrada; si es coach, asignar como entrenador
-    if invitacion.id_equipo and invitacion.id_rol:
-        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-        if rol and rol.nombre == "player":
-            from app.models.jugador import Jugador
-            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
-            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
-            jugador = Jugador(
-                id_usuario=usuario.id_usuario,
-                id_equipo=invitacion.id_equipo,
-                dorsal=dorsal_int,
-                posicion=invitacion.posicion,
-            )
-            db.add(jugador)
-        elif rol and rol.nombre == "coach":
-            # Asignar usuario como entrenador del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_entrenador = usuario.id_usuario
-        elif rol and rol.nombre == "delegate":
-            # Asignar usuario como delegado del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_delegado = usuario.id_usuario
-
-    # Marcar invitación como usada
-    invitacion.usada = True
-    db.commit()
-    db.refresh(usuario)
-
-    return usuario
+        _aceptar_invitacion_para_usuario(db, invitacion, usuario, activo=1)
+        db.commit()
+        db.refresh(usuario)
+        return usuario
+    except (ValueError, IntegrityError):
+        db.rollback()
+        raise
 
 
 def aceptar_invitacion_por_codigo_usuario_existente(
@@ -463,149 +663,56 @@ def aceptar_invitacion_por_codigo_usuario_existente(
     codigo: str,
     usuario_id: int
 ) -> Usuario:
-    """
-    Acepta una invitación mediante código corto cuando el usuario ya tiene cuenta.
+    """Acepta una invitación mediante código corto cuando el usuario ya tiene cuenta."""
+    try:
+        validacion = validar_codigo_invitacion(db, codigo)
+        if not validacion["valido"]:
+            raise ValueError(f"Código inválido: {validacion.get('motivo', 'desconocido')}")
 
-    Valida el código y asigna el rol al usuario existente.
+        invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo.strip().upper()).first()
+        if not invitacion:
+            raise ValueError("Invitación no encontrada")
 
-    Args:
-        db: Sesión de base de datos
-        codigo: Código de la invitación
-        usuario_id: ID del usuario existente
+        usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+        if not usuario:
+            raise ValueError("Usuario no encontrado")
 
-    Returns:
-        Usuario: Usuario con el rol asignado
+        usuario_rol_activo = db.query(UsuarioRol).filter(
+            UsuarioRol.id_usuario == usuario_id,
+            UsuarioRol.id_liga == invitacion.id_liga,
+            UsuarioRol.activo == 1
+        ).first()
+        if usuario_rol_activo:
+            raise ValueError("Ya tienes un rol activo en esta liga")
 
-    Raises:
-        ValueError: Si el código es inválido o el usuario ya tiene rol activo
-    """
-    # Validar código
-    validacion = validar_codigo_invitacion(db, codigo)
-    if not validacion["valido"]:
-        raise ValueError(f"Código inválido: {validacion.get('motivo', 'desconocido')}")
+        # En códigos cortos no había email real. Al aceptar con sesión, lo fijamos.
+        invitacion.email = usuario.email
+        _aceptar_invitacion_para_usuario(db, invitacion, usuario, activo=1)
 
-    # Obtener invitación completa
-    invitacion = db.query(Invitacion).filter(Invitacion.codigo == codigo).first()
-    if not invitacion:
-        raise ValueError("Invitación no encontrada")
-
-    # Obtener usuario
-    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
-    if not usuario:
-        raise ValueError("Usuario no encontrado")
-
-    # Verificar si el usuario ya tiene un rol activo en esta liga
-    usuario_rol_activo = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_liga == invitacion.id_liga,
-        UsuarioRol.activo == 1
-    ).first()
-
-    if usuario_rol_activo:
-        raise ValueError("Ya tienes un rol activo en esta liga")
-
-    # Verificar si existe asignación (activa o no) en esta liga
-    asignacion_existente = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_liga == invitacion.id_liga
-    ).first()
-
-    if asignacion_existente:
-        # Actualizar al rol de la invitación y activar
-        asignacion_existente.id_rol = invitacion.id_rol
-        asignacion_existente.activo = 1
-    else:
-        # Crear nueva asignación activa con el rol de la invitación
-        usuario_rol = UsuarioRol(
-            id_usuario=usuario_id,
-            id_rol=invitacion.id_rol,
-            id_liga=invitacion.id_liga,
-            activo=1
-        )
-        db.add(usuario_rol)
-
-    # Si hay equipo, manejar asignación según el rol
-    if invitacion.id_equipo and invitacion.id_rol:
-        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-        if rol and rol.nombre == "player":
-            # Crear jugador asociado al equipo
-            global Jugador
-            if Jugador is None:
-                from app.models.jugador import Jugador
-            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
-            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
-            jugador = Jugador(
-                id_usuario=usuario_id,
-                id_equipo=invitacion.id_equipo,
-                dorsal=dorsal_int,
-                posicion=invitacion.posicion,
-            )
-            db.add(jugador)
-        elif rol and rol.nombre == "coach":
-            # Asignar usuario como entrenador del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_entrenador = usuario_id
-        elif rol and rol.nombre == "delegate":
-            # Asignar usuario como delegado del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_delegado = usuario_id
-
-    # Marcar invitación como usada
-    invitacion.usada = True
-    db.commit()
-    db.refresh(usuario)
-
-    return usuario
+        db.commit()
+        db.refresh(usuario)
+        return usuario
+    except (ValueError, IntegrityError):
+        db.rollback()
+        raise
 
 
 def validar_token_invitacion(db: Session, token: str) -> Dict[str, Any]:
-    """
-    Valida un token de invitación.
-
-    Verifica que el token exista, no esté usado y no haya expirado.
-
-    Args:
-        db: Sesión de base de datos
-        token: Token a validar
-
-    Returns:
-        Dict con:
-            - valido (bool): True si es válido
-            - motivo (str): Motivo si no es válido
-            - email, liga_nombre, equipo_nombre, rol, etc. si es válido
-    """
-    # Buscar invitación por token
+    """Valida un token de invitación enviado por email."""
     invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
 
     if not invitacion:
         return {"valido": False, "motivo": "Token no encontrado"}
 
-    if invitacion.usada:
-        return {"valido": False, "motivo": "Invitación ya utilizada"}
+    error = _validar_no_usada_ni_expirada(invitacion, "Invitación")
+    if error:
+        return error
 
-    if invitacion.fecha_expiracion < datetime.now(timezone.utc):
-        return {"valido": False, "motivo": "Invitación expirada"}
-
-    # Token válido, obtener información adicional
     liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
     rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-    equipo = None
-    if invitacion.id_equipo:
-        equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
+    equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first() if invitacion.id_equipo else None
 
-    return {
-        "valido": True,
-        "email": invitacion.email,
-        "nombre": invitacion.nombre,
-        "liga_nombre": liga.nombre if liga else "Desconocida",
-        "equipo_nombre": equipo.nombre if equipo else None,
-        "rol": rol.nombre if rol else "player",
-        "dorsal": invitacion.dorsal,
-        "posicion": invitacion.posicion,
-        "tipo_jugador": invitacion.tipo_jugador
-    }
+    return _respuesta_validacion(invitacion, rol, liga, equipo)
 
 
 def aceptar_invitacion(
@@ -616,93 +723,41 @@ def aceptar_invitacion(
     nombre: str | None = None
 ) -> Usuario:
     """
-    Acepta una invitación y crea/activa el usuario.
+    Acepta una invitación por token.
 
-    Valida el token, y:
-    - Si el usuario NO existe: lo crea con contraseña y asigna rol activo
-    - Si el usuario YA existe: activa/asigna el rol en la liga
-
-    Args:
-        db: Sesión de base de datos
-        token: Token de la invitación
-        email: Email del usuario
-        password: Contraseña (solo si es usuario nuevo)
-        nombre: Nombre del usuario (solo si es usuario nuevo)
-
-    Returns:
-        Usuario: Usuario creado o existente
-
-    Raises:
-        ValueError: Si el token es inválido
+    Si el usuario existe, reutiliza el flujo de usuario existente. Si no existe,
+    crea el usuario y las entidades dependientes necesarias para convocatorias.
     """
-    # Validar token
-    validacion = validar_token_invitacion(db, token)
-    if not validacion["valido"]:
-        raise ValueError(f"Invitación inválida: {validacion.get('motivo', 'desconocido')}")
+    try:
+        validacion = validar_token_invitacion(db, token)
+        if not validacion["valido"]:
+            raise ValueError(f"Invitación inválida: {validacion.get('motivo', 'desconocido')}")
 
-    # Obtener invitación completa
-    invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
-    if not invitacion:
-        raise ValueError("Invitación no encontrada")
+        invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
+        if not invitacion:
+            raise ValueError("Invitación no encontrada")
 
-    # Verificar si el usuario ya existe
-    usuario = db.query(Usuario).filter(Usuario.email == email.lower()).first()
+        email_normalizado = _normalizar_email(email)
+        if email_normalizado != _normalizar_email(invitacion.email):
+            raise ValueError("El email no coincide con la invitación")
 
-    if usuario:
-        # Usuario YA existe - solo activar/asignar rol
-        return aceptar_invitacion_usuario_existente(db, token, usuario.id_usuario)
+        usuario = db.query(Usuario).filter(Usuario.email == email_normalizado).first()
+        if usuario:
+            db.rollback()  # Cierra cualquier estado parcial antes de delegar en el flujo existente.
+            return aceptar_invitacion_usuario_existente(db, token, usuario.id_usuario)
 
-    # Usuario NUEVO - crear con contraseña
-    if not password or not nombre:
-        raise ValueError("Se requiere contraseña y nombre para usuarios nuevos")
+        if not password or not nombre:
+            raise ValueError("Se requiere contraseña y nombre para usuarios nuevos")
 
-    from app.api.services.usuario_service import hash_password
-    usuario = Usuario(
-        email=email.lower().strip(),
-        password=hash_password(password),
-        nombre=nombre.strip()
-    )
-    db.add(usuario)
-    db.flush()
+        usuario = _crear_usuario(db, email_normalizado, password, nombre)
+        _aceptar_invitacion_para_usuario(db, invitacion, usuario, activo=1)
 
-    # Asignar rol activo
-    usuario_rol = UsuarioRol(
-        id_usuario=usuario.id_usuario,
-        id_rol=invitacion.id_rol,
-        id_liga=invitacion.id_liga,
-        activo=1
-    )
-    db.add(usuario_rol)
-
-    # Si es jugador con equipo, crear entrada; si es coach, asignar como entrenador
-    if invitacion.id_equipo and invitacion.id_rol:
-        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-        if rol and rol.nombre == "player":
-            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
-            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
-            jugador = Jugador(
-                id_usuario=usuario.id_usuario,
-                id_equipo=invitacion.id_equipo,
-                dorsal=dorsal_int,
-                posicion=invitacion.posicion,
-            )
-            db.add(jugador)
-        elif rol and rol.nombre == "coach":
-            # Asignar usuario como entrenador del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_entrenador = usuario.id_usuario
-        elif rol and rol.nombre == "delegate":
-            # Asignar usuario como delegado del equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_delegado = usuario.id_usuario
-
-    invitacion.usada = True
-    db.commit()
-    db.refresh(usuario)
-
-    return usuario
+        db.commit()
+        db.refresh(usuario)
+        return usuario
+    except (ValueError, IntegrityError):
+        db.rollback()
+        raise
 
 
 def aceptar_invitacion_usuario_existente(
@@ -710,109 +765,39 @@ def aceptar_invitacion_usuario_existente(
     token: str,
     usuario_id: int
 ) -> bool:
-    """
-    Acepta una invitación cuando el usuario ya tiene cuenta.
+    """Acepta una invitación por token cuando el usuario ya tiene cuenta."""
+    try:
+        validacion = validar_token_invitacion(db, token)
+        if not validacion["valido"]:
+            raise ValueError(f"Invitación inválida: {validacion.get('motivo', 'desconocido')}")
 
-    Valida el token, asigna/actualiza el rol del usuario en la liga
-    y marca la invitación como usada.
+        usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
+        if not usuario:
+            raise ValueError("Usuario no encontrado")
 
-    Args:
-        db: Sesión de base de datos
-        token: Token de la invitación
-        usuario_id: ID del usuario que acepta
+        invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
+        if not invitacion:
+            raise ValueError("Invitación no encontrada")
 
-    Returns:
-        bool: True si se aceptó correctamente
+        if _normalizar_email(usuario.email) != _normalizar_email(invitacion.email):
+            raise ValueError("El email no coincide con la invitación")
 
-    Raises:
-        ValueError: Si el token es inválido, el email no coincide,
-                   o el usuario ya pertenece a la misma liga
-    """
-    # Validar token
-    validacion = validar_token_invitacion(db, token)
-    if not validacion["valido"]:
-        raise ValueError(f"Invitación inválida: {validacion.get('motivo', 'desconocido')}")
+        liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
+        if not liga:
+            raise ValueError("Liga no encontrada")
 
-    # Obtener usuario
-    usuario = db.query(Usuario).filter(Usuario.id_usuario == usuario_id).first()
-    if not usuario:
-        raise ValueError("Usuario no encontrado")
+        usuario_rol_activo = db.query(UsuarioRol).filter(
+            UsuarioRol.id_usuario == usuario_id,
+            UsuarioRol.id_liga == invitacion.id_liga,
+            UsuarioRol.activo == 1
+        ).first()
+        if usuario_rol_activo:
+            raise ValueError(f"Ya perteneces a una liga con el nombre '{liga.nombre}'")
 
-    # Verificar que el email coincide
-    if usuario.email.lower() != validacion["email"].lower():
-        raise ValueError("El email no coincide con la invitación")
+        _aceptar_invitacion_para_usuario(db, invitacion, usuario, activo=1)
 
-    # Obtener invitación
-    invitacion = db.query(Invitacion).filter(Invitacion.token == token).first()
-    if not invitacion:
-        raise ValueError("Invitación no encontrada")
-
-    # Obtener liga
-    liga = db.query(Liga).filter(Liga.id_liga == invitacion.id_liga).first()
-    if not liga:
-        raise ValueError("Liga no encontrada")
-
-    # Verificar si el usuario ya tiene un rol activo en esta liga
-    usuario_rol_activo = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_liga == invitacion.id_liga,
-        UsuarioRol.activo == 1
-    ).first()
-
-    if usuario_rol_activo:
-        # El usuario ya pertenece activamente a esta liga
-        raise ValueError(f"Ya perteneces a una liga con el nombre '{liga.nombre}'")
-
-    # Verificar si existe asignación (activa o no) en esta liga
-    asignacion_existente = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == usuario_id,
-        UsuarioRol.id_liga == invitacion.id_liga
-    ).first()
-
-    if asignacion_existente:
-        # Actualizar al rol de la invitación y activar
-        asignacion_existente.id_rol = invitacion.id_rol
-        asignacion_existente.activo = 1
-    else:
-        # Crear nueva asignación activa con el rol de la invitación
-        usuario_rol = UsuarioRol(
-            id_usuario=usuario_id,
-            id_rol=invitacion.id_rol,
-            id_liga=invitacion.id_liga,
-            activo=1
-        )
-        db.add(usuario_rol)
-
-    # Si hay equipo, manejar asignación según el rol
-    if invitacion.id_equipo and invitacion.id_rol:
-        rol = db.query(Rol).filter(Rol.id_rol == invitacion.id_rol).first()
-        if rol and rol.nombre == "player":
-            # Crear jugador asociado al equipo
-            from app.models.jugador import Jugador
-            # Convertir dorsal de string a int (la invitación lo guarda como VARCHAR, pero Jugador requiere INT)
-            dorsal_int = int(invitacion.dorsal) if invitacion.dorsal else None
-            jugador = Jugador(
-                id_usuario=usuario_id,
-                id_equipo=invitacion.id_equipo,
-                dorsal=dorsal_int,
-                posicion=invitacion.posicion,
-            )
-            db.add(jugador)
-        elif rol and rol.nombre == "coach":
-            # Asignar usuario como entrenador del equipo
-            from app.models.equipo import Equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_entrenador = usuario_id
-        elif rol and rol.nombre == "delegate":
-            # Asignar usuario como delegado del equipo
-            from app.models.equipo import Equipo
-            equipo = db.query(Equipo).filter(Equipo.id_equipo == invitacion.id_equipo).first()
-            if equipo:
-                equipo.id_delegado = usuario_id
-
-    # Marcar invitación como usada
-    invitacion.usada = True
-    db.commit()
-
-    return True
+        db.commit()
+        return True
+    except (ValueError, IntegrityError):
+        db.rollback()
+        raise

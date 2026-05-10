@@ -6,8 +6,7 @@ Endpoints para crear, obtener y eliminar convocatorias.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db, get_current_user, require_role
-from fastapi import Depends
+from app.api.dependencies import get_db, get_current_user
 from app.schemas.convocatoria import ConvocatoriaCreate, ConvocatoriaPartidoResponse
 from app.api.services.convocatoria_service import (
     crear_convocatoria,
@@ -44,16 +43,16 @@ def crear_convocatoria_router(
         List[ConvocatoriaPartido]: Lista de convocatorias creadas
 
     Requiere autenticación: Sí
-    Roles permitidos: Admin, Coach, Delegate
+    Roles permitidos: Admin, Coach
 
     Raises:
         HTTPException 400: Si hay más de 11 titulares
         HTTPException 404: Si el partido no existe
     """
-    # Verificar permisos: admin, coach o delegate
-    roles_permitidos = ["admin", "coach", "delegate"]
+    # Solo administradores y entrenadores pueden gestionar la convocatoria.
+    roles_permitidos = ["admin", "coach"]
     if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
-        raise HTTPException(403, "No tienes permiso para crear convocatorias")
+        raise HTTPException(403, "Solo administradores y entrenadores pueden crear convocatorias")
 
     try:
         return crear_convocatoria(db, datos)
@@ -155,12 +154,12 @@ def eliminar_convocatoria_router(
         dict: Mensaje de confirmación
 
     Requiere autenticación: Sí
-    Roles permitidos: Admin, Coach, Delegate
+    Roles permitidos: Admin, Coach
     """
-    # Verificar permisos: admin, coach o delegate
-    roles_permitidos = ["admin", "coach", "delegate"]
+    # Solo administradores y entrenadores pueden gestionar la convocatoria.
+    roles_permitidos = ["admin", "coach"]
     if not any(rol.nombre in roles_permitidos for rol in current_user.roles):
-        raise HTTPException(403, "No tienes permiso para eliminar convocatorias")
+        raise HTTPException(403, "Solo administradores y entrenadores pueden eliminar convocatorias")
 
     try:
         eliminar_convocatoria(db, id_partido)
