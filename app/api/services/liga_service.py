@@ -446,13 +446,14 @@ def obtener_clasificacion(db: Session, liga_id: int) -> List[ClasificacionItem]:
     return resultado
 
 
-def obtener_usuarios_liga(db: Session, liga_id: int) -> list[UsuarioLigaResponse]:
+def obtener_usuarios_liga(db: Session, liga_id: int, solo_activos: bool = False) -> list[UsuarioLigaResponse]:
     """
     Obtiene todos los usuarios de una liga con su rol y estado.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
         liga_id (int): ID de la liga
+        solo_activos (bool): Si True, filtra solo usuarios activos
 
     Returns:
         list[UsuarioLigaResponse]: Lista de usuarios con su información de rol
@@ -466,12 +467,17 @@ def obtener_usuarios_liga(db: Session, liga_id: int) -> list[UsuarioLigaResponse
     if not liga:
         raise ValueError("Liga no encontrada")
 
-    usuarios_roles = db.query(UsuarioRol).options(
+    query = db.query(UsuarioRol).options(
         joinedload(UsuarioRol.usuario),
         joinedload(UsuarioRol.rol)
     ).filter(
         UsuarioRol.id_liga == liga_id
-    ).all()
+    )
+
+    if solo_activos:
+        query = query.filter(UsuarioRol.activo == True)
+
+    usuarios_roles = query.all()
 
     resultado = []
     for ur in usuarios_roles:
