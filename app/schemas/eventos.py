@@ -92,6 +92,9 @@ class EventoPartidoResponse(BaseModel):
         minuto (int): Minuto del partido en que ocurrió
         puntuacion_mvp (float | None): Puntuación del MVP (0-10)
         incidencias (str | None): Notas o incidencias del partido
+        nombre_jugador (str | None): Nombre del jugador involucrado
+        id_equipo (int | None): ID del equipo del jugador
+        nombre_equipo (str | None): Nombre del equipo del jugador
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización del registro
     """
@@ -102,8 +105,11 @@ class EventoPartidoResponse(BaseModel):
     minuto: int
     puntuacion_mvp: float | None
     incidencias: str | None
+    nombre_jugador: str | None = None
+    id_equipo: int | None = None
+    nombre_equipo: str | None = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
-        from_attributes = True  # Permite crear el schema desde objetos ORM de SQLAlchemy
+        from_attributes = True

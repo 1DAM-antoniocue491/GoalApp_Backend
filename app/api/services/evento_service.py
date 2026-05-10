@@ -98,16 +98,17 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     evento = EventoPartido(
         id_partido=datos.id_partido,
         id_jugador=datos.id_jugador,
-        id_jugador_sale=datos.id_jugador_sale,  # Nuevo campo para sustituciones
+        id_jugador_sale=datos.id_jugador_sale,
         tipo_evento=datos.tipo_evento,
-        minuto=datos.minuto
+        minuto=datos.minuto,
+        incidencias=datos.incidencias
     )
     db.add(evento)
     db.commit()
     db.refresh(evento)
 
     # === TRIGGER DE NOTIFICACIÓN DE GOL ===
-    if datos.tipo_evento == "GOL":
+    if datos.tipo_evento == "gol":
         # Obtener info del jugador y equipo
         jugador = db.query(Jugador).filter(
             Jugador.id_jugador == datos.id_jugador
@@ -206,7 +207,7 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
 
 def obtener_eventos_por_partido(db: Session, partido_id: int):
     """
-    Obtiene todos los eventos de un partido específico.
+    Obtiene todos los eventos de un partido específico con información del jugador y equipo.
 
     Args:
         db (Session): Sesión de base de datos SQLAlchemy
@@ -215,7 +216,21 @@ def obtener_eventos_por_partido(db: Session, partido_id: int):
     Returns:
         list[EventoPartido]: Lista de eventos ordenados cronológicamente
     """
-    return db.query(EventoPartido).filter(EventoPartido.id_partido == partido_id).order_by(EventoPartido.minuto).all()
+    eventos = db.query(EventoPartido).options(
+        joinedload(EventoPartido.jugador).joinedload(Jugador.equipo)
+    ).filter(
+        EventoPartido.id_partido == partido_id
+    ).order_by(EventoPartido.minuto).all()
+
+    # Poblar campos adicionales para el response
+    for evento in eventos:
+        if evento.jugador:
+            evento.nombre_jugador = f"{evento.jugador.nombre} {evento.jugador.apellido or ''}".strip()
+            if evento.jugador.equipo:
+                evento.id_equipo = evento.jugador.equipo.id_equipo
+                evento.nombre_equipo = evento.jugador.equipo.nombre
+
+    return eventos
 
 
 def _validar_sustitucion(db: Session, partido: Partido, datos: EventoPartidoCreate):
