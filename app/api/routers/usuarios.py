@@ -452,16 +452,7 @@ def cambiar_estado_usuario(
         HTTPException 400: Si el usuario no tiene un rol asignado en esa liga
     """
     try:
-        asignacion = cambiar_estado_usuario_en_liga(db, usuario_id, liga_id, datos.activo)
-        return UsuarioLigaResponse(
-            id_usuario_rol=asignacion.id_usuario_rol,
-            id_usuario=asignacion.id_usuario,
-            nombre_usuario=asignacion.usuario.nombre,
-            email=asignacion.usuario.email,
-            id_rol=asignacion.id_rol,
-            nombre_rol=asignacion.rol.nombre,
-            activo=asignacion.activo
-        )
+        return cambiar_estado_usuario_en_liga(db, usuario_id, liga_id, datos.activo)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

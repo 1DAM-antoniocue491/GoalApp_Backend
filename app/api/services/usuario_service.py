@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Usuario.
 Maneja operaciones CRUD de usuarios, autenticación, gestión de contraseñas
 con hashing bcrypt, y asignación de roles.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 import secrets
@@ -392,13 +392,18 @@ def cambiar_estado_usuario_en_liga(db: Session, usuario_id: int, liga_id: int, a
         activo (bool): Nuevo estado (True=activo, False=inactivo)
 
     Returns:
-        UsuarioRol: La asignación actualizada
+        UsuarioLigaResponse: Información actualizada del usuario
 
     Raises:
         ValueError: Si el usuario no tiene un rol asignado en esa liga
     """
+    from app.schemas.usuario import UsuarioLigaResponse
+
     # Buscar la asignación
-    asignacion = db.query(UsuarioRol).filter(
+    asignacion = db.query(UsuarioRol).options(
+        joinedload(UsuarioRol.usuario),
+        joinedload(UsuarioRol.rol)
+    ).filter(
         UsuarioRol.id_usuario == usuario_id,
         UsuarioRol.id_liga == liga_id
     ).first()
@@ -406,12 +411,25 @@ def cambiar_estado_usuario_en_liga(db: Session, usuario_id: int, liga_id: int, a
     if not asignacion:
         raise ValueError("El usuario no tiene un rol asignado en esta liga")
 
+    # Save relationship data before commit (expires the instance)
+    nombre_usuario = asignacion.usuario.nombre
+    email = asignacion.usuario.email
+    nombre_rol = asignacion.rol.nombre
+
     # Actualizar el estado
     asignacion.activo = 1 if activo else 0
     db.commit()
-    db.refresh(asignacion)
 
-    return asignacion
+    # Return a serializable response (ORM relationships are expired after commit)
+    return UsuarioLigaResponse(
+        id_usuario_rol=asignacion.id_usuario_rol,
+        id_usuario=asignacion.id_usuario,
+        nombre_usuario=nombre_usuario,
+        email=email,
+        id_rol=asignacion.id_rol,
+        nombre_rol=nombre_rol,
+        activo=asignacion.activo
+    )
 
 
 def obtener_usuarios_con_roles(db: Session, liga_id: int):

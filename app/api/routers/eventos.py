@@ -30,7 +30,9 @@ def crear_evento_router(
     Crea un evento durante el transcurso de un partido (gol, tarjeta amarilla,
     tarjeta roja, sustitución, etc.).
 
-    SOLO el delegado del equipo LOCAL puede crear eventos del partido.
+    El administrador de la liga puede registrar eventos de ambos equipos.
+    El delegado del equipo local SOLO puede registrar eventos del equipo LOCAL.
+    El delegado del equipo visitante SOLO puede registrar eventos del equipo VISITANTE.
 
     Parámetros:
         - evento (EventoPartidoCreate): Datos del evento (partido_id, jugador_id, minuto, tipo)
@@ -41,16 +43,20 @@ def crear_evento_router(
         EventoPartidoResponse: Información del evento creado
 
     Requiere autenticación: Sí
-    Roles permitidos: Delegate (solo del equipo local)
+    Roles permitidos: Admin/Delegate
 
     Raises:
-        HTTPException 403: Si el usuario no es delegado del equipo local
-        HTTPException 400: Si el partido o jugador no existen
+        HTTPException 403: Si el usuario no tiene permisos (admin/delegate)
+        HTTPException 400: Si hay errores de validación (jugador sin estado, etc.)
     """
     try:
         return crear_evento(db, evento, current_user.id_usuario)
     except ValueError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        msg = str(e)
+        # Permission errors → 403, validation errors → 400
+        if "no puede" in msg or "solo puede" in msg or "solo el" in msg:
+            raise HTTPException(status_code=403, detail=msg)
+        raise HTTPException(status_code=400, detail=msg)
 
 @router.get("/partido/{partido_id}", response_model=list[EventoPartidoResponse])
 def listar_eventos_partido(partido_id: int, db: Session = Depends(get_db)):
