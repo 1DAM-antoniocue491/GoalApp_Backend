@@ -1097,6 +1097,12 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
     if partido.estado != "en_juego":
         raise ValueError(f"El partido debe estar 'en_juego' para finalizarlo, estado actual: {partido.estado}")
 
+    # Guardar nombres de equipos ANTES del commit para evitar lazy='raise'
+    eq_local = db.query(Equipo.nombre).filter(Equipo.id_equipo == partido.id_equipo_local).scalar()
+    eq_visit = db.query(Equipo.nombre).filter(Equipo.id_equipo == partido.id_equipo_visitante).scalar()
+    nombre_local_fin = eq_local or "Local"
+    nombre_visitante_fin = eq_visit or "Visitante"
+
     # Actualizar resultado
     partido.goles_local = datos.goles_local
     partido.goles_visitante = datos.goles_visitante
@@ -1155,7 +1161,6 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
     )
     db.add(mvp_evento)
     db.commit()
-    db.refresh(partido)
 
     # Notificar solo a los equipos involucrados con el resultado final
     notificar_equipo(
@@ -1163,7 +1168,7 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
         id_equipo=partido.id_equipo_local,
         tipo="partido_finalizado",
         titulo="Partido Finalizado",
-        mensaje=f"{partido.equipo_local.nombre} {partido.goles_local} - {partido.goles_visitante} {partido.equipo_visitante.nombre}",
+        mensaje=f"{nombre_local_fin} {partido.goles_local} - {partido.goles_visitante} {nombre_visitante_fin}",
         id_referencia=partido.id_partido,
         tipo_referencia="partido"
     )
@@ -1173,7 +1178,7 @@ def finalizar_partido(db: Session, partido_id: int, datos: FinalizarPartidoReque
         id_equipo=partido.id_equipo_visitante,
         tipo="partido_finalizado",
         titulo="Partido Finalizado",
-        mensaje=f"{partido.equipo_visitante.nombre} {partido.goles_visitante} - {partido.goles_local} {partido.equipo_local.nombre}",
+        mensaje=f"{nombre_visitante_fin} {partido.goles_visitante} - {partido.goles_local} {nombre_local_fin}",
         id_referencia=partido.id_partido,
         tipo_referencia="partido"
     )

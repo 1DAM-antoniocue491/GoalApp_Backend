@@ -61,6 +61,7 @@ class JugadorResponse(BaseModel):
         posicion (str): Posición del jugador en el campo
         dorsal (int): Número de dorsal del jugador
         activo (bool): Indica si el jugador está activo en el equipo
+        nombre (str | None): Nombre del usuario asociado
         created_at (datetime): Fecha y hora de creación del registro
         updated_at (datetime): Fecha y hora de última actualización del registro
     """
@@ -70,6 +71,7 @@ class JugadorResponse(BaseModel):
     posicion: str
     dorsal: int
     activo: bool
+    nombre: str | None = None
     created_at: datetime
     updated_at: datetime
 

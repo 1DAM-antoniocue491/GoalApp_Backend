@@ -3,7 +3,7 @@ Servicios de lógica de negocio para Jugador.
 Maneja operaciones CRUD de jugadores, incluyendo su asociación con equipos,
 gestión de posiciones, dorsales y estado activo/inactivo.
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models.jugador import Jugador
 from app.models.usuario import Usuario
 from app.models.equipo import Equipo
@@ -80,7 +80,9 @@ def obtener_jugadores(db: Session, equipo_id: int = None, liga_id: int = None, s
         list[Jugador]: Lista de jugadores (filtrados si se proporciona equipo_id o liga_id)
     """
     from app.models.equipo import Equipo
-    query = db.query(Jugador)
+    query = db.query(Jugador).options(
+        joinedload(Jugador.usuario)
+    )
     if equipo_id is not None:
         query = query.filter(Jugador.id_equipo == equipo_id)
     if liga_id is not None:
@@ -90,7 +92,14 @@ def obtener_jugadores(db: Session, equipo_id: int = None, liga_id: int = None, s
     if solo_activos:
         query = query.filter(Jugador.activo == True)
 
-    return query.all()
+    jugadores = query.all()
+
+    # Poblar nombre del jugador desde el usuario relacionado
+    for j in jugadores:
+        if j.usuario:
+            j.nombre = j.usuario.nombre
+
+    return jugadores
 
 
 def obtener_jugador_por_id(db: Session, jugador_id: int):
