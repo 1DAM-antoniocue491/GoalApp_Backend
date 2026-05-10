@@ -21,6 +21,8 @@ class EquipoBase(BaseModel):
     nombre: str = Field(..., max_length=100)
     escudo: str | None = Field(None, max_length=255)
     colores: str | None = Field(None, max_length=50)
+    ciudad: str | None = Field(None, max_length=255)
+    estadio: str | None = Field(None, max_length=255)
     id_liga: int
     id_entrenador: int | None = None
     id_delegado: int | None = None
@@ -49,6 +51,8 @@ class EquipoUpdate(BaseModel):
     nombre: str | None = Field(None, max_length=100)
     escudo: str | None = Field(None, max_length=255)
     colores: str | None = Field(None, max_length=50)
+    ciudad: str | None = Field(None, max_length=255)
+    estadio: str | None = Field(None, max_length=255)
     id_liga: int | None = None
     id_entrenador: int | None = None
     id_delegado: int | None = None
@@ -73,6 +77,8 @@ class EquipoResponse(BaseModel):
     nombre: str
     escudo: str | None
     colores: str | None
+    ciudad: str | None = None
+    estadio: str | None = None
     id_liga: int
     id_entrenador: int | None = None
     id_delegado: int | None = None
