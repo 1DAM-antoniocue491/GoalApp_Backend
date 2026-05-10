@@ -190,7 +190,8 @@ def actualizar_partido(db: Session, partido_id: int, datos: PartidoUpdate, usuar
         raise ValueError("Partido no encontrado")
 
     # Verificar permisos: admin de la liga, o entrenador/delegado de algun equipo
-    from app.models.usuario_rol import UsuarioRol, Rol
+    from app.models.usuario_rol import UsuarioRol
+    from app.models.rol import Rol
     
     equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
     equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
