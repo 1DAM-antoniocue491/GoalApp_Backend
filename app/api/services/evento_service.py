@@ -107,9 +107,9 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     db.commit()
     db.refresh(evento)
 
-    # === TRIGGER DE NOTIFICACIÓN DE GOL ===
+    # === ACTUALIZAR MARCADOR Y NOTIFICAR GOL ===
     if datos.tipo_evento == "gol":
-        # Obtener info del jugador y equipo
+        # Obtener info del jugador
         jugador = db.query(Jugador).options(
             joinedload(Jugador.usuario)
         ).filter(
@@ -117,6 +117,13 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
         ).first()
 
         if jugador:
+            # Actualizar marcador del partido
+            if jugador.id_equipo == partido.id_equipo_local:
+                partido.goles_local = (partido.goles_local or 0) + 1
+            else:
+                partido.goles_visitante = (partido.goles_visitante or 0) + 1
+            db.commit()
+
             equipo = db.query(Equipo).filter(
                 Equipo.id_equipo == jugador.id_equipo
             ).first()
