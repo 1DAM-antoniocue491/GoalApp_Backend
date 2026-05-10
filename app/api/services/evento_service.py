@@ -110,7 +110,9 @@ def crear_evento(db: Session, datos: EventoPartidoCreate, usuario_id: int):
     # === TRIGGER DE NOTIFICACIÓN DE GOL ===
     if datos.tipo_evento == "gol":
         # Obtener info del jugador y equipo
-        jugador = db.query(Jugador).filter(
+        jugador = db.query(Jugador).options(
+            joinedload(Jugador.usuario)
+        ).filter(
             Jugador.id_jugador == datos.id_jugador
         ).first()
 
@@ -217,6 +219,7 @@ def obtener_eventos_por_partido(db: Session, partido_id: int):
         list[EventoPartido]: Lista de eventos ordenados cronológicamente
     """
     eventos = db.query(EventoPartido).options(
+        joinedload(EventoPartido.jugador).joinedload(Jugador.usuario),
         joinedload(EventoPartido.jugador).joinedload(Jugador.equipo)
     ).filter(
         EventoPartido.id_partido == partido_id
@@ -225,7 +228,7 @@ def obtener_eventos_por_partido(db: Session, partido_id: int):
     # Poblar campos adicionales para el response
     for evento in eventos:
         if evento.jugador:
-            evento.nombre_jugador = f"{evento.jugador.nombre} {evento.jugador.apellido or ''}".strip()
+            evento.nombre_jugador = evento.jugador.usuario.nombre
             if evento.jugador.equipo:
                 evento.id_equipo = evento.jugador.equipo.id_equipo
                 evento.nombre_equipo = evento.jugador.equipo.nombre
