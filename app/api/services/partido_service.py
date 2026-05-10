@@ -982,8 +982,9 @@ def iniciar_partido(db: Session, partido_id: int, usuario_id: int):
     nombre_local = equipo_local.nombre
     nombre_visitante = equipo_visitante.nombre
 
-    # Cambiar estado a 'en_juego'
+    # Cambiar estado a 'en_juego' y actualizar fecha al momento real de inicio
     partido.estado = "en_juego"
+    partido.fecha = datetime.now(timezone.utc)
 
     # Inicializar estados de los jugadores
     _inicializar_estados_jugadores(db, partido, [partido.id_equipo_local, partido.id_equipo_visitante])
