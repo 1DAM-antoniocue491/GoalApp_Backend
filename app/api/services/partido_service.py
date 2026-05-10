@@ -196,26 +196,31 @@ def actualizar_partido(db: Session, partido_id: int, datos: PartidoUpdate, usuar
     equipo_local = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_local).first()
     equipo_visitante = db.query(Equipo).filter(Equipo.id_equipo == partido.id_equipo_visitante).first()
     
-    usuario_roles = db.query(UsuarioRol).filter(
-        UsuarioRol.id_usuario == usuario_id
-    ).all()
-    roles_usuario = set()
-    ligas_usuario = {}
-    for ur in usuario_roles:
-        rol_nombre = db.query(Rol).filter(Rol.id_rol == ur.id_rol).first()
-        if rol_nombre:
-            roles_usuario.add(rol_nombre.nombre)
-            ligas_usuario[rol_nombre.nombre] = ur.id_liga
+    # Verificar si es admin de la liga
+    es_admin = db.query(UsuarioRol).join(
+        Rol, UsuarioRol.id_rol == Rol.id_rol
+    ).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == partido.id_liga,
+        Rol.nombre == "admin"
+    ).first() is not None
     
-    es_admin_global = "admin" in roles_usuario
-    es_admin_liga = es_admin_global and ligas_usuario.get("admin") == partido.id_liga
-    es_entrenador_local = "coach" in roles_usuario and equipo_local and ligas_usuario.get("coach") == partido.id_liga
-    es_entrenador_visitante = "coach" in roles_usuario and equipo_visitante and ligas_usuario.get("coach") == partido.id_liga
-    es_delegado_local = "delegate" in roles_usuario and equipo_local and ligas_usuario.get("delegate") == partido.id_liga
-    es_delegado_visitante = "delegate" in roles_usuario and equipo_visitante and ligas_usuario.get("delegate") == partido.id_liga
+    # Verificar si es entrenador o delegado directo de algun equipo
+    es_entrenador_o_delegado = (
+        (equipo_local and (usuario_id == equipo_local.id_entrenador or usuario_id == equipo_local.id_delegado)) or
+        (equipo_visitante and (usuario_id == equipo_visitante.id_entrenador or usuario_id == equipo_visitante.id_delegado))
+    )
     
-    if not (es_admin_liga or es_entrenador_local or es_entrenador_visitante or
-            es_delegado_local or es_delegado_visitante):
+    # Verificar si tiene rol coach o delegate en la liga
+    tiene_rol_coach_delegate = db.query(UsuarioRol).join(
+        Rol, UsuarioRol.id_rol == Rol.id_rol
+    ).filter(
+        UsuarioRol.id_usuario == usuario_id,
+        UsuarioRol.id_liga == partido.id_liga,
+        Rol.nombre.in_(["coach", "delegate"])
+    ).first() is not None
+    
+    if not (es_admin or es_entrenador_o_delegado or tiene_rol_coach_delegate):
         raise ValueError("No tienes permisos para editar este partido")
 
     # Actualizar solo los campos proporcionados
